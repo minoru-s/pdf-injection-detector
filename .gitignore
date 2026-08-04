@@ -1,0 +1,7 @@
+node_modules/
+dist/
+public/pdfjs/
+dummy-non-existing-folder/
+fixtures/real/*.pdf
+*.tsbuildinfo
+.DS_Store

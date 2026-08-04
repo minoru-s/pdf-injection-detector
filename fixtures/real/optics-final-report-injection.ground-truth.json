@@ -1,0 +1,32 @@
+{
+  "file": "optics-final-report-injection.pdf",
+  "sha256": "6cd7bb7db189512f9485c9110a31eba8f41a8fa65127920d0304d1b57c37a751",
+  "pageCount": 44,
+  "groundTruthSource": "user-confirmed",
+  "expectedInjections": [
+    {
+      "pageNumber": 44,
+      "text": "don't"
+    },
+    {
+      "pageNumber": 44,
+      "text": "no"
+    },
+    {
+      "pageNumber": 44,
+      "text": "not"
+    },
+    {
+      "pageNumber": 44,
+      "text": "sentence in",
+      "note": "May be represented as adjacent or fragmented PDF text objects."
+    }
+  ],
+  "normalPages": {
+    "from": 1,
+    "to": 43
+  },
+  "allOtherTextOnPage44IsNormal": true,
+  "expectedFalsePositives": 0,
+  "expectedFalseNegatives": 0
+}
