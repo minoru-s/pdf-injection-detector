@@ -523,7 +523,7 @@ export default function App() {
                   選択したPDFの読み込み、描画、文字情報の解析、検出結果の生成は、すべてこのブラウザ内で完結します。PDFの内容、抽出した文字列、検出結果を外部サーバーへ送信する処理はありません。
                 </p>
                 <p>
-                  サイトの利用状況を把握するため、Google Analyticsを使用しています。ページの閲覧情報やブラウザ・端末に関する情報などがGoogleへ送信されることがありますが、PDFの内容、抽出した文字列、検出結果はGoogle Analyticsへ送信されません。
+                  サイトの利用状況を把握するため、Google Analyticsを使用しています。ページの閲覧情報やブラウザ・端末に関する情報などが匿名化された形でGoogleへ送信されることがありますが、入力したPDFの内容、抽出した文字列、検出結果などは一切Google Analyticsへ送信されません。
                 </p>
                 <div className="modal-privacy">
                   <span aria-hidden="true">✓</span>

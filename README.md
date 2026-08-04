@@ -23,9 +23,9 @@ AI向け表現だけで単独判定は行いません。OCRは現在の検出対
 
 ### プライバシー
 
-PDFの読み込み、描画、文字情報の解析、検出結果の生成はブラウザ内で完結します。PDF本文、抽出文字、検出結果は外部サーバーやGoogle Analyticsへ送信されません。
+PDFの読み込み、描画、文字情報の解析、検出結果の生成はブラウザ内で完結します。PDF本文、抽出文字、検出結果はお使いの端末から外部へ一切送信されません。
 
-利用状況の把握のためGoogle Analyticsを使用しており、ページの閲覧情報やブラウザ・端末に関する情報などがGoogleへ送信されることがあります。
+利用状況の把握のためGoogle Analyticsを使用しており、ページの閲覧情報やブラウザ・端末に関する情報などは匿名化された形でGoogleへ送信されることがあります。
 
 ### ローカルでの実行
 
@@ -82,9 +82,9 @@ Prompt-like wording never produces a finding by itself. OCR is not currently inc
 
 ### Privacy
 
-PDF loading, rendering, text analysis, and result generation are performed entirely in the browser. PDF contents, extracted text, and detection results are not sent to an external server or Google Analytics.
+PDF loading, rendering, text analysis, and result generation are performed entirely in the browser. PDF contents, extracted text, and detection results never leave your device.
 
-Google Analytics is used to understand site usage. Page-view information and browser or device information may be sent to Google.
+Google Analytics is used to understand site usage. Page-view information and browser or device information may be sent to Google in anonymized form.
 
 ### Local development
 
