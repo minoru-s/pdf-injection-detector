@@ -27,6 +27,26 @@ describe("scoreCandidate", () => {
     expect(scoreCandidate(baseCandidate, 12, 600, 800)).toBeNull();
   });
 
+  it("does not flag a readable footer only because the page uses large headings", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Copyright © Example Corporation. All rights reserved.",
+      box: { x: 80, y: 765, width: 360, height: 18 },
+      fontSize: 12.36,
+    };
+    expect(scoreCandidate(candidate, 36, 960, 810)).toBeNull();
+  });
+
+  it("still flags genuinely tiny text", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Arbitrary tiny neutral text",
+      fontSize: 2,
+    };
+    const detection = scoreCandidate(candidate, 12, 600, 800);
+    expect(detection?.signals.map((signal) => signal.kind)).toContain("tiny-text");
+  });
+
   it("does not use instruction language as a standalone signal", () => {
     const candidate = {
       ...baseCandidate,

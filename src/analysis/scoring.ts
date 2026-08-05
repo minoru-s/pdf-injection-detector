@@ -25,6 +25,10 @@ const VISIBILITY_SIGNAL_KINDS = new Set([
   "occluded-text",
 ]);
 
+// Relative size alone makes readable footers look suspicious on pages dominated
+// by large headings. Require a genuinely small effective size as well.
+const MAX_TINY_TEXT_SIZE = 8;
+
 function colorDistance(
   declared: string | null,
   rendered: [number, number, number] | null,
@@ -85,6 +89,7 @@ export function scoreCandidate(
     textLength >= 4 &&
     medianFontSize > 0 &&
     candidate.fontSize > 0 &&
+    candidate.fontSize < MAX_TINY_TEXT_SIZE &&
     candidate.fontSize < medianFontSize * 0.35
   ) {
     signals.push({
