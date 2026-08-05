@@ -45,7 +45,7 @@ npm run preview
 
 `fixtures/visibility-cases.pdf`は、正常例と、白文字、微小文字、圧縮文字、ページ端、被覆、低透明度の検出例を含む生成テストPDFです。
 
-`fixtures/real/`には、任意のローカル回帰テスト用PDFを配置できます。ユーザー提供のPDF本体はGitの追跡対象外です。現在使用している5件の回帰サンプルについては、正解ラベルのみをJSONで管理しています。
+`fixtures/real/`には、任意のローカル回帰テスト用PDFを配置できます。ユーザー提供のPDF本体はGitの追跡対象外です。現在使用している6件の回帰サンプルについては、正解ラベルのみをJSONで管理しています。
 
 ### GitHub PagesとPWA
 
@@ -104,7 +104,7 @@ npm run preview
 
 `fixtures/visibility-cases.pdf` is a generated test PDF containing a control case and examples of white-on-white, tiny, compressed, edge-positioned, covered, and low-opacity text.
 
-Optional local regression PDFs can be placed in `fixtures/real/`. User-provided PDFs are ignored by Git. Only ground-truth JSON labels for the five current regression samples are tracked.
+Optional local regression PDFs can be placed in `fixtures/real/`. User-provided PDFs are ignored by Git. Only ground-truth JSON labels for the six current regression samples are tracked.
 
 ### GitHub Pages and PWA
 

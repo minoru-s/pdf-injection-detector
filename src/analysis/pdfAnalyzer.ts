@@ -595,6 +595,7 @@ function parseOperations(
           operationIndex: index,
           text,
           box,
+          hasRecordedBox: recordedBox !== null,
           geometryReliable: boxesHaveReliableAgreement(
             recordedBox,
             calculatedFallbackBox,

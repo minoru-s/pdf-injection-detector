@@ -12,6 +12,7 @@ const baseCandidate: TextCandidate = {
   operationIndex: 10,
   text: "Ordinary lecture material",
   box: { x: 100, y: 100, width: 220, height: 16 },
+  hasRecordedBox: true,
   geometryReliable: true,
   fontSize: 12,
   horizontalScale: 100,
@@ -86,6 +87,21 @@ describe("scoreCandidate", () => {
         (signal) => signal.kind,
       ),
     ).toContain("low-contrast");
+  });
+
+  it("rejects fallback-only tiny same-color text from an unscaled form", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "ホッピング",
+      box: { x: 0, y: 808.5, width: 5.463, height: 1.5 },
+      hasRecordedBox: false,
+      geometryReliable: false,
+      fontSize: 1,
+      fillColor: "#ffffff",
+      surroundingColor: [248, 248, 248] as [number, number, number],
+      declaredInkRatio: 1,
+    };
+    expect(scoreCandidate(candidate, 1, 1080, 810)).toBeNull();
   });
 
   it("rejects glyph-width compression from unreliable geometry", () => {

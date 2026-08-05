@@ -96,7 +96,8 @@ export function scoreCandidate(
   const textLength = [...candidate.text.trim()].length;
   const instructionLanguage = hasInstructionLanguage(instructionContext);
   const allowUnreliableGeometryEvidence =
-    instructionLanguage || candidate.fontSize <= 3;
+    instructionLanguage ||
+    (candidate.fontSize <= 3 && candidate.hasRecordedBox);
   const declaredVsRendered = colorDistance(
     candidate.fillColor,
     candidate.surroundingColor,

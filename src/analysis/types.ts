@@ -55,6 +55,7 @@ export interface TextCandidate {
   operationIndex: number;
   text: string;
   box: BoundingBox;
+  hasRecordedBox: boolean;
   geometryReliable: boolean;
   fontSize: number;
   horizontalScale: number;

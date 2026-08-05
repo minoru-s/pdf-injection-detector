@@ -1,0 +1,17 @@
+{
+  "file": "jaxa_doc02_20240125.pdf",
+  "sha256": "4995f5acd3303298a9554f90a06bdcf94dae549e8e04e196dfc877185518513b",
+  "pageCount": 9,
+  "groundTruthSource": "user-confirmed",
+  "expectedInjections": [],
+  "allCurrentDetectionsAreFalsePositives": true,
+  "expectedFalsePositives": 0,
+  "expectedFalseNegatives": 0,
+  "priorFalsePositiveSummary": {
+    "pageNumber": 1,
+    "total": 6,
+    "texts": ["質量", "寸法", "高さ", "奥行", "ホッピング", "パッド"],
+    "signal": "low-contrast",
+    "cause": "visible white labels in transformed PowerPoint content were sampled at fallback-only page-edge bounds because recorded operation bounds were missing"
+  }
+}
