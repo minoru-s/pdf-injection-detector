@@ -7,7 +7,10 @@ import type {
 
 const INSTRUCTION_PATTERNS = [
   /(?:ignore|disregard|forget).{0,40}(?:instruction|prompt|direction)/iu,
+  /(?:ignore|disregard|forget).{0,50}(?:requested|required|specified|desired).{0,30}(?:output|response|answer)?\s*(?:format|style)/iu,
+  /(?:begin|start).{0,30}(?:response|answer|output).{0,30}(?:with|by)/iu,
   /(?:do not|never).{0,30}(?:mention|reveal|disclose).{0,30}(?:instruction|prompt)/iu,
+  /(?:do not|never).{0,30}(?:mention|reveal|disclose).{0,30}(?:note|message|text)/iu,
   /(?:include|insert|output|respond|answer).{0,50}(?:word|phrase|token|exactly|必ず)/iu,
   /(?:chatgpt|llm|language model|generative ai|生成ai|言語モデル)/iu,
   /(?:以前|これまで|上記).{0,20}(?:指示|命令).{0,20}(?:無視|忘れ)/u,
@@ -50,16 +53,48 @@ export function hasInstructionLanguage(text: string): boolean {
   return INSTRUCTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function belongsToSameTextRun(left: TextCandidate, right: TextCandidate): boolean {
+  const operationGap = right.operationIndex - left.operationIndex;
+  const largerFontSize = Math.max(left.fontSize, right.fontSize);
+  const smallerFontSize = Math.min(left.fontSize, right.fontSize);
+  return (
+    operationGap > 0 &&
+    operationGap <= 12 &&
+    left.fillColor === right.fillColor &&
+    Math.abs(left.fillAlpha - right.fillAlpha) <= 0.1 &&
+    left.renderingMode === right.renderingMode &&
+    largerFontSize > 0 &&
+    smallerFontSize / largerFontSize >= 0.8
+  );
+}
+
+export function instructionContextForCandidate(
+  candidates: TextCandidate[],
+  index: number,
+): string {
+  const run = [candidates[index]];
+  for (let cursor = index - 1; cursor >= 0 && run.length < 5; cursor -= 1) {
+    if (!belongsToSameTextRun(candidates[cursor], candidates[cursor + 1])) break;
+    run.unshift(candidates[cursor]);
+  }
+  for (let cursor = index + 1; cursor < candidates.length && run.length < 5; cursor += 1) {
+    if (!belongsToSameTextRun(candidates[cursor - 1], candidates[cursor])) break;
+    run.push(candidates[cursor]);
+  }
+  return run.map((candidate) => candidate.text.trim()).join(" ").slice(0, 800);
+}
+
 export function scoreCandidate(
   candidate: TextCandidate,
   medianFontSize: number,
   pageWidth: number,
   pageHeight: number,
+  instructionContext = candidate.text,
 ): Detection | null {
   const signals: DetectionSignal[] = [];
   const { box } = candidate;
   const textLength = [...candidate.text.trim()].length;
-  const instructionLanguage = hasInstructionLanguage(candidate.text);
+  const instructionLanguage = hasInstructionLanguage(instructionContext);
   const allowUnreliableGeometryEvidence =
     instructionLanguage || candidate.fontSize <= 3;
   const declaredVsRendered = colorDistance(

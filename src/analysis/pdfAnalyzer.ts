@@ -8,7 +8,7 @@ import {
   boxExtentAlongDirection,
   boxesHaveReliableAgreement,
 } from "./geometry";
-import { scoreCandidate } from "./scoring";
+import { instructionContextForCandidate, scoreCandidate } from "./scoring";
 import type {
   BoundingBox,
   DocumentAnalysis,
@@ -750,8 +750,14 @@ async function analyzePage(
       .filter((fontSize) => fontSize > 0),
   );
   const detections = candidates
-    .map((candidate) =>
-      scoreCandidate(candidate, medianFontSize, canvas.width, canvas.height),
+    .map((candidate, index) =>
+      scoreCandidate(
+        candidate,
+        medianFontSize,
+        canvas.width,
+        canvas.height,
+        instructionContextForCandidate(candidates, index),
+      ),
     )
     .filter((detection) => detection !== null)
     .sort((left, right) => right.score - left.score);
