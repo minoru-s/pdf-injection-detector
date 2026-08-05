@@ -1,0 +1,16 @@
+{
+  "file": "ICT_A435_handouts.pdf",
+  "sha256": "c0203a79c365f3d48d0c518857f6e67e3bd515443fd683db800434609feb769e",
+  "pageCount": 61,
+  "groundTruthSource": "user-confirmed",
+  "expectedInjections": [],
+  "allCurrentDetectionsAreFalsePositives": true,
+  "expectedFalsePositives": 0,
+  "expectedFalseNegatives": 0,
+  "priorFalsePositiveSummary": {
+    "total": 71,
+    "lowContrast": 58,
+    "compressedText": 13,
+    "cause": "unreliable recorded text bounds in nested LuaTeX/Beamer form objects"
+  }
+}

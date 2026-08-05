@@ -4,7 +4,10 @@ import {
   getDocument,
 } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { boxExtentAlongDirection } from "./geometry";
+import {
+  boxExtentAlongDirection,
+  boxesHaveReliableAgreement,
+} from "./geometry";
 import { scoreCandidate } from "./scoring";
 import type {
   BoundingBox,
@@ -571,8 +574,12 @@ function parseOperations(
       const textDirectionY =
         deviceEffective[1] * (state.horizontalScale / 100);
       const recordedBox = bboxForOperation(bboxes, index, width, height);
-      const box =
-        recordedBox ?? fallbackTextBox(state, viewportTransform, advance);
+      const calculatedFallbackBox = fallbackTextBox(
+        state,
+        viewportTransform,
+        advance,
+      );
+      const box = recordedBox ?? calculatedFallbackBox;
       const deviceScaleX = Math.hypot(textDirectionX, textDirectionY);
       const naturalWidth = Math.abs(
         advance * state.fontSize * Math.max(0.0001, deviceScaleX),
@@ -588,6 +595,10 @@ function parseOperations(
           operationIndex: index,
           text,
           box,
+          geometryReliable: boxesHaveReliableAgreement(
+            recordedBox,
+            calculatedFallbackBox,
+          ),
           fontSize: state.fontSize * Math.max(0.0001, scaleY),
           horizontalScale: state.horizontalScale,
           transformScaleRatio: scaleY > 0 ? scaleX / scaleY : 0,

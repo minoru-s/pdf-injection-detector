@@ -60,6 +60,8 @@ export function scoreCandidate(
   const { box } = candidate;
   const textLength = [...candidate.text.trim()].length;
   const instructionLanguage = hasInstructionLanguage(candidate.text);
+  const allowUnreliableGeometryEvidence =
+    instructionLanguage || candidate.fontSize <= 3;
   const declaredVsRendered = colorDistance(
     candidate.fillColor,
     candidate.surroundingColor,
@@ -73,6 +75,7 @@ export function scoreCandidate(
     candidate.surroundingConfidence >= 0.55 &&
     candidate.declaredInkRatio !== null &&
     candidate.declaredInkRatio > 0.72 &&
+    (candidate.geometryReliable || allowUnreliableGeometryEvidence) &&
     !replacedByLaterPaint
   ) {
     signals.push({
@@ -98,10 +101,14 @@ export function scoreCandidate(
     });
   }
 
+  const geometryCompressionRatio =
+    candidate.geometryReliable || instructionLanguage
+      ? candidate.glyphWidthRatio
+      : 1;
   const compressionRatio = Math.min(
     candidate.horizontalScale / 100,
     candidate.transformScaleRatio,
-    candidate.glyphWidthRatio,
+    geometryCompressionRatio,
   );
   if (textLength >= 2 && compressionRatio < 0.35) {
     signals.push({

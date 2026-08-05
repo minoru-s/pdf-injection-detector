@@ -1,5 +1,41 @@
 import type { BoundingBox } from "./types";
 
+export function boxesHaveReliableAgreement(
+  recorded: BoundingBox | null,
+  calculated: BoundingBox,
+): boolean {
+  if (!recorded) return false;
+  const recordedArea = recorded.width * recorded.height;
+  const calculatedArea = calculated.width * calculated.height;
+  if (recordedArea <= 0 || calculatedArea <= 0) return false;
+
+  const intersectionWidth = Math.max(
+    0,
+    Math.min(recorded.x + recorded.width, calculated.x + calculated.width) -
+      Math.max(recorded.x, calculated.x),
+  );
+  const intersectionHeight = Math.max(
+    0,
+    Math.min(recorded.y + recorded.height, calculated.y + calculated.height) -
+      Math.max(recorded.y, calculated.y),
+  );
+  const intersectionArea = intersectionWidth * intersectionHeight;
+  const smallerCoverage =
+    intersectionArea / Math.min(recordedArea, calculatedArea);
+  const widthAgreement =
+    Math.min(recorded.width, calculated.width) /
+    Math.max(recorded.width, calculated.width);
+  const heightAgreement =
+    Math.min(recorded.height, calculated.height) /
+    Math.max(recorded.height, calculated.height);
+
+  return (
+    smallerCoverage >= 0.5 &&
+    widthAgreement >= 0.5 &&
+    heightAgreement >= 0.5
+  );
+}
+
 export function boxExtentAlongDirection(
   box: BoundingBox,
   directionX: number,
