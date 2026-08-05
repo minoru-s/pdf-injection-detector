@@ -25,6 +25,8 @@ const VISIBILITY_SIGNAL_KINDS = new Set([
   "compressed-text",
   "edge-or-outside",
   "transparent-text",
+  "clipped-text",
+  "hidden-layer",
   "occluded-text",
 ]);
 
@@ -106,7 +108,7 @@ export function scoreCandidate(
 
   if (
     declaredVsRendered !== null &&
-    declaredVsRendered < 20 &&
+    declaredVsRendered < 28 &&
     textLength >= 2 &&
     candidate.surroundingConfidence >= 0.55 &&
     candidate.declaredInkRatio !== null &&
@@ -183,17 +185,37 @@ export function scoreCandidate(
   }
 
   if (
-    (candidate.fillAlpha <= 0.15 || candidate.renderingMode === 3) &&
-    instructionLanguage
+    candidate.renderingMode === 3 ||
+    (candidate.fillAlpha <= 0.15 && instructionLanguage)
   ) {
     signals.push({
       kind: "transparent-text",
-      score: 35,
+      score: candidate.renderingMode === 3 ? 50 : 35,
       label: "透明または非表示の文字",
       detail:
         candidate.renderingMode === 3
           ? "PDFの文字描画モードが非表示です。"
           : `文字の不透明度が ${Math.round(candidate.fillAlpha * 100)}% です。`,
+    });
+  }
+
+  if (candidate.hiddenByClipping && textLength >= 4) {
+    signals.push({
+      kind: "clipped-text",
+      score: 50,
+      label: "描画領域が消失した文字",
+      detail:
+        "PDFに記録された文字の描画領域が空です。ゼロ面積のクリップなどで表示されていない可能性があります。",
+    });
+  }
+
+  if (candidate.hiddenByOptionalContent && textLength >= 4) {
+    signals.push({
+      kind: "hidden-layer",
+      score: 50,
+      label: "非表示レイヤー内の文字",
+      detail:
+        "PDFを開いたときに非表示となるOptional Content Group内に配置されています。",
     });
   }
 

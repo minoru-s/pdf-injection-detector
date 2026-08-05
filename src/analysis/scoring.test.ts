@@ -13,14 +13,18 @@ const baseCandidate: TextCandidate = {
   text: "Ordinary lecture material",
   box: { x: 100, y: 100, width: 220, height: 16 },
   hasRecordedBox: true,
+  recordedBoxEmpty: false,
+  hiddenByClipping: false,
   geometryReliable: true,
   fontSize: 12,
   horizontalScale: 100,
   transformScaleRatio: 1,
   glyphWidthRatio: 1,
   fillColor: "#000000",
+  fillColorKind: "solid",
   fillAlpha: 1,
   renderingMode: 0,
+  hiddenByOptionalContent: false,
   surroundingColor: [255, 255, 255],
   surroundingConfidence: 0.95,
   declaredInkRatio: 0.08,
@@ -310,6 +314,58 @@ describe("scoreCandidate", () => {
     expect(detection?.signals.map((signal) => signal.kind)).toContain(
       "transparent-text",
     );
+  });
+
+  it("reports non-rendering text without relying on instruction wording", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Ordinary-looking paraphrased sentence",
+      renderingMode: 3,
+    };
+    expect(
+      scoreCandidate(candidate, 12, 600, 800)?.signals.map(
+        (signal) => signal.kind,
+      ),
+    ).toContain("transparent-text");
+  });
+
+  it("reports text whose recorded drawing box is empty", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Text hidden by an empty clipping path",
+      recordedBoxEmpty: true,
+      hiddenByClipping: true,
+      geometryReliable: false,
+    };
+    expect(
+      scoreCandidate(candidate, 12, 600, 800)?.signals.map(
+        (signal) => signal.kind,
+      ),
+    ).toContain("clipped-text");
+  });
+
+  it("does not equate a missing recorded glyph box with clipping", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Visible embedded-font label",
+      recordedBoxEmpty: true,
+      hiddenByClipping: false,
+      geometryReliable: false,
+    };
+    expect(scoreCandidate(candidate, 12, 600, 800)).toBeNull();
+  });
+
+  it("reports text in an initially hidden optional-content layer", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Text stored in an optional layer",
+      hiddenByOptionalContent: true,
+    };
+    expect(
+      scoreCandidate(candidate, 12, 600, 800)?.signals.map(
+        (signal) => signal.kind,
+      ),
+    ).toContain("hidden-layer");
   });
 });
 

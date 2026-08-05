@@ -6,6 +6,8 @@ export type SignalKind =
   | "compressed-text"
   | "edge-or-outside"
   | "transparent-text"
+  | "clipped-text"
+  | "hidden-layer"
   | "occluded-text"
   | "instruction-language";
 
@@ -56,14 +58,18 @@ export interface TextCandidate {
   text: string;
   box: BoundingBox;
   hasRecordedBox: boolean;
+  recordedBoxEmpty: boolean;
+  hiddenByClipping: boolean;
   geometryReliable: boolean;
   fontSize: number;
   horizontalScale: number;
   transformScaleRatio: number;
   glyphWidthRatio: number;
   fillColor: string | null;
+  fillColorKind: "solid" | "pattern" | "unknown";
   fillAlpha: number;
   renderingMode: number;
+  hiddenByOptionalContent: boolean;
   surroundingColor: [number, number, number] | null;
   surroundingConfidence: number;
   declaredInkRatio: number | null;

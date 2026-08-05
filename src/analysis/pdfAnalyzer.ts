@@ -46,9 +46,15 @@ interface GraphicsState {
   fontSize: number;
   horizontalScale: number;
   fillColor: string | null;
+  fillColorKind: "solid" | "pattern" | "unknown";
   fillAlpha: number;
   renderingMode: number;
   textRise: number;
+  zeroAreaClip: boolean;
+}
+
+interface OptionalContentVisibility {
+  isVisible(group: unknown): boolean;
 }
 
 interface PaintOperation {
@@ -154,6 +160,42 @@ function normalizeColor(args: unknown[]): string | null {
     return `#${gray}${gray}${gray}`;
   }
   return null;
+}
+
+function inferSolidPatternColor(args: unknown[]): string | null {
+  const pattern = args.find(
+    (value) =>
+      value !== null &&
+      typeof value === "object" &&
+      Array.isArray((value as PDFOperatorList).fnArray) &&
+      Array.isArray((value as PDFOperatorList).argsArray),
+  ) as PDFOperatorList | undefined;
+  if (!pattern) return null;
+
+  const colors: string[] = [];
+  for (let index = 0; index < pattern.fnArray.length; index += 1) {
+    const operator = pattern.fnArray[index];
+    if (operator !== OPS.setFillRGBColor && operator !== OPS.setFillGray) continue;
+    const color = normalizeColor(pattern.argsArray[index] ?? []);
+    if (color) colors.push(color);
+  }
+  if (colors.length === 0 || colors.some((color) => color !== colors[0])) {
+    return null;
+  }
+  return colors[0];
+}
+
+function pathHasZeroArea(args: unknown[]): boolean {
+  const bounds = args[2];
+  if (!bounds || typeof bounds !== "object") return false;
+  const values = Array.from(bounds as ArrayLike<number>);
+  if (values.length < 4 || values.slice(0, 4).some((value) => !Number.isFinite(value))) {
+    return false;
+  }
+  return (
+    Math.abs(values[2] - values[0]) <= 1e-6 ||
+    Math.abs(values[3] - values[1]) <= 1e-6
+  );
 }
 
 function extractGlyphData(args: unknown[]): { text: string; advance: number } {
@@ -449,6 +491,7 @@ function parseOperations(
   context: CanvasRenderingContext2D,
   viewportTransform: Matrix,
   pageNumber: number,
+  optionalContentConfig: OptionalContentVisibility | null,
 ): TextCandidate[] {
   const width = context.canvas.width;
   const height = context.canvas.height;
@@ -463,11 +506,15 @@ function parseOperations(
     fontSize: 0,
     horizontalScale: 100,
     fillColor: "#000000",
+    fillColorKind: "solid",
     fillAlpha: 1,
     renderingMode: 0,
     textRise: 0,
+    zeroAreaClip: false,
   };
   const stack: GraphicsState[] = [];
+  const markedContentVisibility = [true];
+  let pendingClip = false;
   const textDrafts: Array<
     Omit<
       TextCandidate,
@@ -551,15 +598,58 @@ function parseOperations(
     }
     if (operator === OPS.setFillRGBColor || operator === OPS.setFillGray) {
       state.fillColor = normalizeColor(args);
+      state.fillColorKind = "solid";
+      continue;
+    }
+    if (operator === OPS.setFillColorN) {
+      state.fillColor = inferSolidPatternColor(args);
+      state.fillColorKind = "pattern";
       continue;
     }
     if (operator === OPS.setFillTransparent) {
       state.fillColor = "#ffffff";
+      state.fillColorKind = "solid";
       state.fillAlpha = 0;
       continue;
     }
     if (operator === OPS.setGState) {
       applyGState(state, args);
+      continue;
+    }
+
+    if (operator === OPS.clip || operator === OPS.eoClip) {
+      pendingClip = true;
+      continue;
+    }
+    if (operator === OPS.constructPath && pendingClip) {
+      state.zeroAreaClip = state.zeroAreaClip || pathHasZeroArea(args);
+      pendingClip = false;
+    }
+
+    if (operator === OPS.beginMarkedContent) {
+      markedContentVisibility.push(
+        markedContentVisibility[markedContentVisibility.length - 1],
+      );
+      continue;
+    }
+    if (operator === OPS.beginMarkedContentProps) {
+      const parentVisible =
+        markedContentVisibility[markedContentVisibility.length - 1];
+      const tag = args[0];
+      const properties = args[1];
+      let ownVisible = true;
+      if (tag === "OC" && optionalContentConfig && properties) {
+        try {
+          ownVisible = optionalContentConfig.isVisible(properties);
+        } catch {
+          ownVisible = true;
+        }
+      }
+      markedContentVisibility.push(parentVisible && ownVisible);
+      continue;
+    }
+    if (operator === OPS.endMarkedContent) {
+      if (markedContentVisibility.length > 1) markedContentVisibility.pop();
       continue;
     }
 
@@ -579,7 +669,14 @@ function parseOperations(
         viewportTransform,
         advance,
       );
-      const box = recordedBox ?? calculatedFallbackBox;
+      const recordedBoxEmpty =
+        recordedBox !== null &&
+        (recordedBox.width * recordedBox.height <= 0.5 ||
+          recordedBox.width <= 0 ||
+          recordedBox.height <= 0);
+      const box = recordedBox && !recordedBoxEmpty
+        ? recordedBox
+        : calculatedFallbackBox;
       const deviceScaleX = Math.hypot(textDirectionX, textDirectionY);
       const naturalWidth = Math.abs(
         advance * state.fontSize * Math.max(0.0001, deviceScaleX),
@@ -596,6 +693,8 @@ function parseOperations(
           text,
           box,
           hasRecordedBox: recordedBox !== null,
+          recordedBoxEmpty,
+          hiddenByClipping: state.zeroAreaClip,
           geometryReliable: boxesHaveReliableAgreement(
             recordedBox,
             calculatedFallbackBox,
@@ -608,8 +707,11 @@ function parseOperations(
               ? Math.min(2, measuredAdvanceExtent / naturalWidth)
               : 1,
           fillColor: state.fillColor,
+          fillColorKind: state.fillColorKind,
           fillAlpha: state.fillAlpha,
           renderingMode: state.renderingMode,
+          hiddenByOptionalContent:
+            !markedContentVisibility[markedContentVisibility.length - 1],
         });
       }
       state.textX += advance * state.fontSize * (state.horizontalScale / 100);
@@ -667,6 +769,7 @@ function pdfAssetUrl(path: string): string {
 async function analyzePage(
   pdf: Awaited<ReturnType<typeof getDocument>["promise"]>,
   pageNumber: number,
+  optionalContentConfig: OptionalContentVisibility | null,
 ): Promise<PageAnalysis> {
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale: 1.5 });
@@ -692,6 +795,7 @@ async function analyzePage(
     context,
     viewport.transform as Matrix,
     pageNumber,
+    optionalContentConfig,
   );
   const occlusionGroups = new Map<string, TextCandidate[]>();
   for (const candidate of candidates) {
@@ -796,10 +900,13 @@ export async function analyzePdf(
     useSystemFonts: true,
   });
   const pdf = await loadingTask.promise;
+  const optionalContentConfig = await pdf.getOptionalContentConfig({
+    intent: "display",
+  });
   const pages: PageAnalysis[] = [];
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      pages.push(await analyzePage(pdf, pageNumber));
+      pages.push(await analyzePage(pdf, pageNumber, optionalContentConfig));
       onProgress?.(pageNumber, pdf.numPages);
     }
   } finally {
