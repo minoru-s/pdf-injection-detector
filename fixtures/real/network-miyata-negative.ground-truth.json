@@ -1,0 +1,22 @@
+{
+  "file": "Network_Miyata.pdf",
+  "sha256": "5636ecdd7725010ebdc88198c6af9b0a5751030bec9f119e3dec3d87ce18c2a0",
+  "pageCount": 61,
+  "groundTruthSource": "user-confirmed",
+  "expectedInjections": [],
+  "allTextIsNormal": true,
+  "expectedFalsePositives": 0,
+  "expectedFalseNegatives": 0,
+  "priorFalsePositiveObservations": [
+    {
+      "pageNumber": 42,
+      "text": "average queueing delay",
+      "cause": "rotated axis label misread as horizontal glyph compression"
+    },
+    {
+      "pageNumber": 53,
+      "texts": ["link", "network", "transport", "physical"],
+      "cause": "intermediate same-color text fully replaced by later artwork"
+    }
+  ]
+}

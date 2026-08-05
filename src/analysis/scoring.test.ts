@@ -115,6 +115,21 @@ describe("scoreCandidate", () => {
     expect(scoreCandidate(candidate, 12, 600, 800)).toBeNull();
   });
 
+  it("does not report intermediate same-color text replaced by later artwork", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "network",
+      fillColor: "#c00000",
+      surroundingColor: [200, 8, 8] as [number, number, number],
+      surroundingConfidence: 0.74,
+      declaredInkRatio: 0.82,
+      laterOcclusionRatio: 1,
+      occlusionChangeRatio: 0.81,
+      laterOccluderIndices: [629],
+    };
+    expect(scoreCandidate(candidate, 28, 1440, 810)).toBeNull();
+  });
+
   it("does not flag ordinary text merely for touching a page edge", () => {
     const candidate = {
       ...baseCandidate,

@@ -4,6 +4,7 @@ import {
   getDocument,
 } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { boxExtentAlongDirection } from "./geometry";
 import { scoreCandidate } from "./scoring";
 import type {
   BoundingBox,
@@ -564,12 +565,22 @@ function parseOperations(
       const effective = multiplyMatrices(state.ctm, state.textMatrix);
       const scaleX = Math.hypot(effective[0], effective[1]) * (state.horizontalScale / 100);
       const scaleY = Math.hypot(effective[2], effective[3]);
+      const deviceEffective = multiplyMatrices(viewportTransform, effective);
+      const textDirectionX =
+        deviceEffective[0] * (state.horizontalScale / 100);
+      const textDirectionY =
+        deviceEffective[1] * (state.horizontalScale / 100);
       const recordedBox = bboxForOperation(bboxes, index, width, height);
       const box =
         recordedBox ?? fallbackTextBox(state, viewportTransform, advance);
-      const viewportScaleX = Math.hypot(viewportTransform[0], viewportTransform[1]);
+      const deviceScaleX = Math.hypot(textDirectionX, textDirectionY);
       const naturalWidth = Math.abs(
-        advance * state.fontSize * scaleX * Math.max(0.0001, viewportScaleX),
+        advance * state.fontSize * Math.max(0.0001, deviceScaleX),
+      );
+      const measuredAdvanceExtent = boxExtentAlongDirection(
+        box,
+        textDirectionX,
+        textDirectionY,
       );
       if (text.trim()) {
         textDrafts.push({
@@ -581,7 +592,9 @@ function parseOperations(
           horizontalScale: state.horizontalScale,
           transformScaleRatio: scaleY > 0 ? scaleX / scaleY : 0,
           glyphWidthRatio:
-            naturalWidth > 0 ? Math.min(2, box.width / naturalWidth) : 1,
+            naturalWidth > 0
+              ? Math.min(2, measuredAdvanceExtent / naturalWidth)
+              : 1,
           fillColor: state.fillColor,
           fillAlpha: state.fillAlpha,
           renderingMode: state.renderingMode,

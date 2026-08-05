@@ -64,9 +64,7 @@ export function scoreCandidate(
     candidate.fillColor,
     candidate.surroundingColor,
   );
-  const contradictedLowContrastEvidence =
-    candidate.laterOcclusionRatio >= 0.9 &&
-    candidate.occlusionChangeRatio < 0.65;
+  const replacedByLaterPaint = candidate.laterOcclusionRatio >= 0.98;
 
   if (
     declaredVsRendered !== null &&
@@ -75,7 +73,7 @@ export function scoreCandidate(
     candidate.surroundingConfidence >= 0.55 &&
     candidate.declaredInkRatio !== null &&
     candidate.declaredInkRatio > 0.72 &&
-    !contradictedLowContrastEvidence
+    !replacedByLaterPaint
   ) {
     signals.push({
       kind: "low-contrast",
