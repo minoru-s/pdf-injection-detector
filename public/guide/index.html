@@ -9,8 +9,12 @@
     <link rel="icon" href="../favicon-64.png" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
     <link rel="canonical" href="https://minoru-s.github.io/pdf-injection-detector/guide/" />
+    <link rel="alternate" hreflang="ja" href="https://minoru-s.github.io/pdf-injection-detector/guide/" />
+    <link rel="alternate" hreflang="en" href="https://minoru-s.github.io/pdf-injection-detector/guide/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://minoru-s.github.io/pdf-injection-detector/guide/" />
     <meta property="og:type" content="article" />
     <meta property="og:locale" content="ja_JP" />
+    <meta property="og:locale:alternate" content="en_US" />
     <meta property="og:site_name" content="PDFender" />
     <meta property="og:title" content="PDFの隠し文字を検出する仕組み | PDFender" />
     <meta property="og:description" content="PDFの白文字、非表示レイヤー、クリッピング、被覆など、人間には見えにくくテキスト抽出には含まれる文字を検出する仕組みを解説します。" />
@@ -80,6 +84,21 @@
         text-decoration: none;
         box-shadow: 0 3px 10px rgba(23, 110, 209, 0.17);
       }
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .language-link {
+        padding: 7px 9px;
+        color: #536175;
+        border: 1px solid rgba(82, 100, 126, 0.16);
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 680;
+        text-decoration: none;
+      }
+      .language-link:hover { background: rgba(255, 255, 255, 0.66); }
       main {
         width: min(820px, calc(100% - 36px));
         margin: 0 auto;
@@ -205,6 +224,62 @@
         line-height: 1.8;
       }
       .note strong { color: #394455; }
+      .table-wrap {
+        margin-top: 24px;
+        overflow-x: auto;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(82, 100, 126, 0.14);
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(43, 57, 78, 0.045);
+      }
+      table {
+        width: 100%;
+        min-width: 650px;
+        border-collapse: collapse;
+        font-size: 12px;
+        line-height: 1.65;
+      }
+      th, td {
+        padding: 13px 14px;
+        border-bottom: 1px solid rgba(82, 100, 126, 0.11);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: #435065;
+        background: rgba(235, 239, 244, 0.74);
+        font-size: 11px;
+        font-weight: 720;
+      }
+      td { color: #5c697b; }
+      tr:last-child td { border-bottom: 0; }
+      .detected {
+        color: #28704a;
+        font-weight: 720;
+        white-space: nowrap;
+      }
+      .qa-list {
+        margin-top: 24px;
+        display: grid;
+        gap: 10px;
+      }
+      .qa-item {
+        padding: 19px 20px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(82, 100, 126, 0.13);
+        border-radius: 13px;
+      }
+      .qa-item h3 {
+        margin: 0 0 8px;
+        color: #303b4d;
+        font-size: 14px;
+      }
+      .qa-item p {
+        margin: 0;
+        color: #5f6c7e;
+        font-size: 13px;
+        line-height: 1.8;
+      }
       .cta {
         padding: 28px;
         text-align: center;
@@ -234,6 +309,9 @@
         main { padding-top: 52px; }
         .cards { grid-template-columns: 1fr; }
         .open-app { font-size: 11px; }
+        .header-inner { gap: 10px; }
+        .header-actions { gap: 5px; }
+        .language-link { padding: 7px; }
       }
       @media (prefers-reduced-motion: reduce) {
         * { scroll-behavior: auto !important; }
@@ -247,7 +325,10 @@
           <img src="../icon-192.png" alt="" />
           <span>PDFender</span>
         </a>
-        <a class="open-app" href="../">PDFを検査する</a>
+        <div class="header-actions">
+          <a class="language-link" href="./en/" lang="en" hreflang="en">English</a>
+          <a class="open-app" href="../">PDFを検査する</a>
+        </div>
       </div>
     </header>
     <main>
@@ -294,6 +375,63 @@
       </section>
 
       <section>
+        <h2>開発時の検証結果</h2>
+        <p>
+          検出機構ごとに作成した検証用PDFを現行版で確認した結果です。通常のPDF閲覧では認識できない一方、テキスト抽出では取得される文字を対象にしています。これは既知の手口に対する回帰確認であり、未知のPDFに対する性能保証や第三者評価ではありません。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">PDF内の手口</th>
+                <th scope="col">通常表示</th>
+                <th scope="col">テキスト抽出</th>
+                <th scope="col">PDFender</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>文字描画モード Tr 3</td>
+                <td>完全に非表示</td>
+                <td>取得される</td>
+                <td class="detected">検出</td>
+              </tr>
+              <tr>
+                <td>ゼロ面積のクリッピング領域</td>
+                <td>完全に非表示</td>
+                <td>取得される</td>
+                <td class="detected">検出</td>
+              </tr>
+              <tr>
+                <td>初期状態OFFのOptional Content Group</td>
+                <td>非表示レイヤー</td>
+                <td>取得される</td>
+                <td class="detected">検出</td>
+              </tr>
+              <tr>
+                <td>白一色のPattern塗り</td>
+                <td>白背景では判読不能</td>
+                <td>取得される</td>
+                <td class="detected">検出</td>
+              </tr>
+              <tr>
+                <td>淡い装飾帯と同色の文字</td>
+                <td>装飾に紛れて判読困難</td>
+                <td>取得される</td>
+                <td class="detected">検出</td>
+              </tr>
+              <tr>
+                <td>後続の図形による被覆</td>
+                <td>図形の背後で判読不能</td>
+                <td>取得される</td>
+                <td class="detected">検出</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
         <h2>検出結果の考え方</h2>
         <p>
           検出結果は、確認すべき箇所を絞り込むための機械的な手掛かりです。隠し文字が必ずプロンプトインジェクションであるとは限らず、検出がなかったPDFの安全性を保証するものでもありません。
@@ -301,6 +439,36 @@
         <div class="note">
           <strong>対象範囲について：</strong>
           PDFenderは、通常のPDFテキスト抽出では取得できる一方、人間には認識しにくい文字を主な検査対象にしています。画像化された文字やアウトライン化された文字は通常のテキスト抽出に含まれないため、原則として対象外です。OCRは行いません。
+        </div>
+      </section>
+
+      <section>
+        <h2>よくある質問</h2>
+        <div class="qa-list">
+          <article class="qa-item">
+            <h3>PDFの隠し文字とは何ですか？</h3>
+            <p>PDFのテキスト抽出では取得できる一方、白文字、極小表示、非表示レイヤー、クリッピング、図形による被覆などによって、人間が通常の閲覧画面では認識しにくい文字です。</p>
+          </article>
+          <article class="qa-item">
+            <h3>PDFenderはPDFをサーバーへアップロードしますか？</h3>
+            <p>いいえ。PDFの読み込み、描画、文字情報の解析、検出結果の生成はブラウザ内で完結し、PDF本文、抽出文字、検出結果が端末の外へ送信されることはありません。</p>
+          </article>
+          <article class="qa-item">
+            <h3>AIへの指示に似た文章だけで検出しますか？</h3>
+            <p>いいえ。指示表現だけを根拠にはしません。文字の非表示、低コントラスト、極小化、圧縮、被覆などの視認性異常がある場合に限り、指示に似た表現を確信度の補強に使用します。</p>
+          </article>
+          <article class="qa-item">
+            <h3>OCRを使用していますか？</h3>
+            <p>使用していません。PDFenderはPDF内部の文字と描画命令を解析します。画像化・アウトライン化された文字は通常のテキスト抽出に含まれないため、原則として検査対象外です。</p>
+          </article>
+          <article class="qa-item">
+            <h3>「検出なし」なら、そのPDFは安全ですか？</h3>
+            <p>安全性を保証するものではありません。PDFenderは確認箇所を絞るための静的解析ツールであり、未知の描画方法や複雑なPDF構造による見逃し、正常な文字の誤検知が発生する可能性があります。</p>
+          </article>
+          <article class="qa-item">
+            <h3>日本語のPDFにも対応していますか？</h3>
+            <p>はい。日本語CIDフォントの表示に必要なPDF.jsのCMapと標準フォントを同梱し、日本語PDFの描画と検出箇所のプレビューに対応しています。ただし、PDFの作成方法によって文字を取得できない場合があります。</p>
+          </article>
         </div>
       </section>
 

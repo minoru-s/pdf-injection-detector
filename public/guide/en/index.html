@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Learn how PDFender detects hidden prompt injections in PDF files, including white text, invisible rendering modes, clipping, hidden layers, compressed text, and object occlusion." />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#eef1f5" />
+    <link rel="icon" href="../../favicon-64.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png" />
+    <link rel="stylesheet" href="../guide.css" />
+    <link rel="canonical" href="https://minoru-s.github.io/pdf-injection-detector/guide/en/" />
+    <link rel="alternate" hreflang="ja" href="https://minoru-s.github.io/pdf-injection-detector/guide/" />
+    <link rel="alternate" hreflang="en" href="https://minoru-s.github.io/pdf-injection-detector/guide/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://minoru-s.github.io/pdf-injection-detector/guide/" />
+    <meta property="og:type" content="article" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="ja_JP" />
+    <meta property="og:site_name" content="PDFender" />
+    <meta property="og:title" content="How PDFender detects hidden text in PDF files" />
+    <meta property="og:description" content="A technical guide to detecting PDF text hidden with color, clipping, optional layers, invisible rendering modes, compression, and later-drawn objects." />
+    <meta property="og:url" content="https://minoru-s.github.io/pdf-injection-detector/guide/en/" />
+    <meta property="og:image" content="https://minoru-s.github.io/pdf-injection-detector/app-icon-1024.png" />
+    <meta property="og:image:alt" content="PDFender app icon" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="How PDFender detects hidden text in PDF files" />
+    <meta name="twitter:description" content="How PDFender examines PDF drawing operations to find visually hidden prompt injections." />
+    <meta name="twitter:image" content="https://minoru-s.github.io/pdf-injection-detector/app-icon-1024.png" />
+    <title>Hidden PDF Text and Prompt Injection Detection | PDFender</title>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="header-inner">
+        <a class="brand" href="../../" aria-label="Open PDFender">
+          <img src="../../icon-192.png" alt="" />
+          <span>PDFender</span>
+        </a>
+        <div class="header-actions">
+          <a class="language-link" href="../" lang="ja" hreflang="ja">日本語</a>
+          <a class="open-app" href="../../">Scan a PDF</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <p class="eyebrow">Detection guide</p>
+      <h1>Find hidden PDF text through drawing data</h1>
+      <p class="lead">
+        A PDF can contain text that is available to text extraction tools but difficult or impossible for a person to notice in a normal viewer. PDFender is a static analysis tool for reviewing these hidden instructions—also known as indirect prompt injections—in lecture materials and other PDF documents.
+      </p>
+      <div class="privacy">
+        <span aria-hidden="true">✓</span>
+        <strong>PDF loading, rendering, text analysis, and result generation take place entirely in your browser. PDF contents, extracted text, and findings never leave your device.</strong>
+      </div>
+
+      <section>
+        <h2>Hiding techniques PDFender examines</h2>
+        <p>PDFender focuses on abnormal visibility rather than treating suspicious wording alone as proof of an injection.</p>
+        <div class="cards">
+          <article class="card">
+            <strong>Text matching its background</strong>
+            <p>It compares the declared text color with the rendered area around the text, covering white-on-white text and text camouflaged within decorative colors.</p>
+          </article>
+          <article class="card">
+            <strong>Tiny or compressed text</strong>
+            <p>It compares text size with typical text on the page and examines transformation matrices for text made unreadable through extreme scaling or compression.</p>
+          </article>
+          <article class="card">
+            <strong>Text that is not painted</strong>
+            <p>It checks invisible text rendering modes, empty clipping regions, and optional-content layers that are disabled when the document opens.</p>
+          </article>
+          <article class="card">
+            <strong>Text covered by later objects</strong>
+            <p>It analyzes drawing order and overlap with later paths or images, and can compare pixels after re-rendering without suspected covering objects.</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>How the analysis works</h2>
+        <ol class="steps">
+          <li>PDF.js renders each page while PDFender records text, path, and image drawing operations together with their order.</li>
+          <li>It evaluates color, opacity, size, transforms, position, clipping, optional-content visibility, and overlap with later objects.</li>
+          <li>It calculates a confidence score from visibility anomalies. Prompt-like language can raise confidence only when a visibility anomaly already exists.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Development verification results</h2>
+        <p>
+          These results come from purpose-built regression PDFs that contain text unavailable to normal visual inspection but present in text extraction. They confirm known mechanisms in the current version; they are not an independent evaluation or a guarantee for unknown PDF files.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">PDF technique</th>
+                <th scope="col">Normal view</th>
+                <th scope="col">Text extraction</th>
+                <th scope="col">PDFender</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Text rendering mode Tr 3</td><td>Completely invisible</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+              <tr><td>Zero-area clipping path</td><td>Completely invisible</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+              <tr><td>Optional Content Group disabled by default</td><td>Hidden layer</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+              <tr><td>Solid-white tiling pattern</td><td>Unreadable on white</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+              <tr><td>Text matching a pale decorative stripe</td><td>Camouflaged in decoration</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+              <tr><td>Occlusion by a later-drawn object</td><td>Covered and unreadable</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>How to interpret findings</h2>
+        <p>
+          A finding is a mechanical clue that helps a reviewer focus on suspicious areas. Hidden text is not necessarily a prompt injection, and a clean result does not guarantee that a PDF is safe.
+        </p>
+        <div class="note">
+          <strong>Scope:</strong>
+          PDFender primarily examines text that standard PDF text extraction can retrieve but a person may not notice. Rasterized text and outlined glyphs are generally outside this scope because standard text extraction does not expose them. PDFender does not perform OCR.
+        </div>
+      </section>
+
+      <section>
+        <h2>Frequently asked questions</h2>
+        <div class="qa-list">
+          <article class="qa-item">
+            <h3>What is hidden text in a PDF?</h3>
+            <p>It is text that extraction tools can retrieve but people may not notice because it is white, tiny, clipped, placed in a hidden layer, compressed, or covered by another object.</p>
+          </article>
+          <article class="qa-item">
+            <h3>Does PDFender upload PDF files to a server?</h3>
+            <p>No. Loading, rendering, text analysis, and result generation happen locally in the browser. PDF contents, extracted text, and findings do not leave the device.</p>
+          </article>
+          <article class="qa-item">
+            <h3>Does prompt-like wording trigger a finding by itself?</h3>
+            <p>No. PDFender uses prompt-like language only to strengthen confidence when the same text also has a visibility anomaly such as non-rendering, low contrast, compression, or occlusion.</p>
+          </article>
+          <article class="qa-item">
+            <h3>Does PDFender use OCR?</h3>
+            <p>No. It analyzes text and drawing operations stored inside the PDF. Rasterized text and outlined glyphs are normally outside its scope because standard PDF text extraction does not expose them.</p>
+          </article>
+          <article class="qa-item">
+            <h3>Does “no findings” mean that a PDF is safe?</h3>
+            <p>No. PDFender is a static review aid. Unfamiliar rendering techniques or complex PDF structures may produce false negatives, while legitimate visual design can produce false positives.</p>
+          </article>
+          <article class="qa-item">
+            <h3>Can PDFender inspect Japanese PDF files?</h3>
+            <p>Yes. The deployed app includes the PDF.js CMaps and standard-font data needed to render Japanese CID fonts and preview detected locations. Some authoring methods can still prevent text extraction.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2>Inspect a PDF in your browser</h2>
+        <p>No installation or PDF upload is required.</p>
+        <a href="../../">Open PDFender</a>
+      </section>
+
+      <footer>
+        <p>PDFender — PDF hidden-instruction detector</p>
+      </footer>
+    </main>
+  </body>
+</html>
