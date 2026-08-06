@@ -142,6 +142,7 @@ export function scoreCandidate(
     candidate.declaredInkRatio > 0.72 &&
     (candidate.geometryReliable || allowUnreliableGeometryEvidence) &&
     !shortNumericLayoutLabel &&
+    !candidate.hasExactVisibleTextMatch &&
     !replacedByLaterPaint
   ) {
     signals.push({

@@ -73,6 +73,7 @@ export interface TextCandidate {
   surroundingColor: [number, number, number] | null;
   surroundingConfidence: number;
   declaredInkRatio: number | null;
+  hasExactVisibleTextMatch: boolean;
   laterOcclusionRatio: number;
   occlusionChangeRatio: number;
   laterOccluderIndices: number[];

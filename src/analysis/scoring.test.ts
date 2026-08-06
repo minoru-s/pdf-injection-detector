@@ -29,6 +29,7 @@ const baseCandidate: TextCandidate = {
   surroundingColor: [255, 255, 255],
   surroundingConfidence: 0.95,
   declaredInkRatio: 0.08,
+  hasExactVisibleTextMatch: false,
   laterOcclusionRatio: 0,
   occlusionChangeRatio: 0,
   laterOccluderIndices: [],
@@ -93,6 +94,18 @@ describe("scoreCandidate", () => {
         (signal) => signal.kind,
       ),
     ).toContain("low-contrast");
+  });
+
+  it("rejects low-contrast evidence with an exact visible text match", () => {
+    const candidate = {
+      ...baseCandidate,
+      text: "Visible white heading",
+      fillColor: "#ffffff",
+      surroundingColor: [248, 248, 248] as [number, number, number],
+      declaredInkRatio: 0.9,
+      hasExactVisibleTextMatch: true,
+    };
+    expect(scoreCandidate(candidate, 12, 600, 800)).toBeNull();
   });
 
   it("keeps fully same-color hidden fragments even when their recorded box is large", () => {

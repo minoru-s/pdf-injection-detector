@@ -63,6 +63,12 @@ interface PaintOperation {
   alpha: number;
 }
 
+interface TextContentItemLike {
+  str: string;
+  transform: number[];
+  width: number;
+}
+
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
 
 function cloneState(state: GraphicsState): GraphicsState {
@@ -521,6 +527,7 @@ function parseOperations(
       | "surroundingColor"
       | "surroundingConfidence"
       | "declaredInkRatio"
+      | "hasExactVisibleTextMatch"
       | "laterOcclusionRatio"
       | "occlusionChangeRatio"
       | "laterOccluderIndices"
@@ -746,6 +753,7 @@ function parseOperations(
     return {
       ...draft,
       ...pixelEvidence,
+      hasExactVisibleTextMatch: false,
       laterOcclusionRatio: overlap.ratio,
       occlusionChangeRatio: 0,
       laterOccluderIndices: overlap.operationIndices,
@@ -793,6 +801,116 @@ function markNearbyReplacementText(candidates: TextCandidate[]) {
   }
 }
 
+function normalizedText(value: string): string {
+  return value.normalize("NFKC").replace(/\s+/gu, "").trim();
+}
+
+function textContentBox(
+  item: TextContentItemLike,
+  viewportTransform: Matrix,
+): BoundingBox | null {
+  const itemMatrix = matrixFromArgs(item.transform);
+  if (!itemMatrix || !Number.isFinite(item.width) || item.width <= 0) return null;
+  const matrix = multiplyMatrices(viewportTransform, itemMatrix);
+  const baselineScale = Math.hypot(matrix[0], matrix[1]);
+  const viewportScale = Math.hypot(viewportTransform[0], viewportTransform[1]);
+  if (baselineScale <= 0 || viewportScale <= 0) return null;
+  const width = item.width * viewportScale;
+  const baselineX = matrix[0] / baselineScale;
+  const baselineY = matrix[1] / baselineScale;
+  const points: Array<[number, number]> = [
+    [matrix[4], matrix[5]],
+    [matrix[4] + baselineX * width, matrix[5] + baselineY * width],
+    [matrix[4] + matrix[2], matrix[5] + matrix[3]],
+    [
+      matrix[4] + baselineX * width + matrix[2],
+      matrix[5] + baselineY * width + matrix[3],
+    ],
+  ];
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function textBoxHasStrongRenderedContrast(
+  context: CanvasRenderingContext2D,
+  box: BoundingBox,
+  declaredRgb: [number, number, number],
+): boolean {
+  const x = Math.max(0, Math.floor(box.x));
+  const y = Math.max(0, Math.floor(box.y));
+  const width = Math.min(
+    context.canvas.width - x,
+    Math.max(1, Math.ceil(box.width)),
+  );
+  const height = Math.min(
+    context.canvas.height - y,
+    Math.max(1, Math.ceil(box.height)),
+  );
+  if (width <= 0 || height <= 0) return false;
+  try {
+    const pixels = context.getImageData(x, y, width, height).data;
+    const stride = Math.max(1, Math.floor(Math.sqrt((width * height) / 3000)));
+    let opaque = 0;
+    let contrasting = 0;
+    for (let py = 0; py < height; py += stride) {
+      for (let px = 0; px < width; px += stride) {
+        const offset = (py * width + px) * 4;
+        if (pixels[offset + 3] < 220) continue;
+        opaque += 1;
+        const pixel: [number, number, number] = [
+          pixels[offset],
+          pixels[offset + 1],
+          pixels[offset + 2],
+        ];
+        if (rgbDistance(declaredRgb, pixel) >= 70) contrasting += 1;
+      }
+    }
+    return contrasting >= 8 && opaque > 0 && contrasting / opaque >= 0.4;
+  } catch {
+    return false;
+  }
+}
+
+function markExactVisibleTextMatches(
+  candidates: TextCandidate[],
+  items: TextContentItemLike[],
+  context: CanvasRenderingContext2D,
+  viewportTransform: Matrix,
+) {
+  const itemBoxes = new Map<string, BoundingBox[]>();
+  for (const item of items) {
+    const text = normalizedText(item.str);
+    const box = textContentBox(item, viewportTransform);
+    if (!text || !box) continue;
+    const boxes = itemBoxes.get(text) ?? [];
+    boxes.push(box);
+    itemBoxes.set(text, boxes);
+  }
+
+  const candidateCounts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const text = normalizedText(candidate.text);
+    if (!text) continue;
+    candidateCounts.set(text, (candidateCounts.get(text) ?? 0) + 1);
+  }
+
+  for (const candidate of candidates) {
+    const text = normalizedText(candidate.text);
+    const boxes = itemBoxes.get(text);
+    if (!boxes || candidateCounts.get(text) !== boxes.length) continue;
+    const declaredRgb = parseHexColor(candidate.fillColor);
+    if (!declaredRgb) continue;
+    candidate.hasExactVisibleTextMatch = boxes.every((box) =>
+      textBoxHasStrongRenderedContrast(context, box, declaredRgb),
+    );
+  }
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
@@ -821,6 +939,7 @@ async function analyzePage(
   if (!context) throw new Error("Canvasを初期化できませんでした。");
 
   const operatorListPromise = page.getOperatorList();
+  const textContentPromise = page.getTextContent();
   await page.render({
     canvas,
     canvasContext: context,
@@ -829,6 +948,7 @@ async function analyzePage(
     background: "#ffffff",
   }).promise;
   const operatorList = await operatorListPromise;
+  const textContent = await textContentPromise;
   const bboxes = page.recordedBBoxes as BBoxReader | null;
   const candidates = parseOperations(
     operatorList,
@@ -839,6 +959,18 @@ async function analyzePage(
     optionalContentConfig,
   );
   markNearbyReplacementText(candidates);
+  markExactVisibleTextMatches(
+    candidates,
+    textContent.items
+      .filter((item) => "str" in item)
+      .map((item) => ({
+        str: item.str,
+        transform: [...item.transform],
+        width: item.width,
+      })),
+    context,
+    viewport.transform as Matrix,
+  );
   const occlusionGroups = new Map<string, TextCandidate[]>();
   for (const candidate of candidates) {
     if (
