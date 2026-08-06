@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://minoru-s.github.io/pdf-injection-detector/sitemap.xml

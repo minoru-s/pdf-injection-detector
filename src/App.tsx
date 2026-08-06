@@ -506,6 +506,15 @@ export default function App() {
               <p>
                 PDF内の見えにくい文字、極端に小さい文字、圧縮された文字、後続オブジェクトに隠された文字などを、PDFの描画情報から確認するための静的解析ツールです。
               </p>
+              <a
+                className="learn-more-link"
+                href={`${import.meta.env.BASE_URL}guide/`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                検出方式をもっと詳しく
+                <span aria-hidden="true">↗</span>
+              </a>
 
               <section className="modal-section">
                 <h3>免責事項</h3>

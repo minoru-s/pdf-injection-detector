@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="PDFに隠されたプロンプトインジェクションをPDFenderが検出する仕組みを解説します。白文字、極小文字、圧縮、非表示レイヤー、クリッピング、オブジェクトによる被覆をブラウザ内で検査します。" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#eef1f5" />
+    <link rel="icon" href="../favicon-64.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+    <link rel="canonical" href="https://minoru-s.github.io/pdf-injection-detector/guide/" />
+    <meta property="og:type" content="article" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:site_name" content="PDFender" />
+    <meta property="og:title" content="PDFの隠し文字を検出する仕組み | PDFender" />
+    <meta property="og:description" content="PDFの白文字、非表示レイヤー、クリッピング、被覆など、人間には見えにくくテキスト抽出には含まれる文字を検出する仕組みを解説します。" />
+    <meta property="og:url" content="https://minoru-s.github.io/pdf-injection-detector/guide/" />
+    <meta property="og:image" content="https://minoru-s.github.io/pdf-injection-detector/app-icon-1024.png" />
+    <meta property="og:image:alt" content="PDFenderのアプリアイコン" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="PDFの隠し文字を検出する仕組み | PDFender" />
+    <meta name="twitter:description" content="PDFenderがPDFの描画情報から隠し文字を検査する仕組みを解説します。" />
+    <meta name="twitter:image" content="https://minoru-s.github.io/pdf-injection-detector/app-icon-1024.png" />
+    <title>PDFの隠し文字を検出する仕組み | PDFender</title>
+    <style>
+      :root {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+        color: #172033;
+        background: #eef1f5;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+      }
+      * { box-sizing: border-box; }
+      html { min-width: 320px; background: #eef1f5; }
+      body {
+        margin: 0;
+        background: linear-gradient(145deg, #edf2f7 0%, #f8f8fa 52%, #eef1f4 100%);
+      }
+      a { color: #1766c2; }
+      .page-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid rgba(78, 94, 116, 0.14);
+        background: rgba(247, 248, 250, 0.86);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+      }
+      .header-inner {
+        width: min(920px, calc(100% - 36px));
+        min-height: 56px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: #303846;
+        font-size: 14px;
+        font-weight: 730;
+        text-decoration: none;
+      }
+      .brand img {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        box-shadow: 0 1px 5px rgba(25, 34, 49, 0.16);
+      }
+      .open-app {
+        padding: 8px 12px;
+        color: #fff;
+        background: #176ed1;
+        border-radius: 9px;
+        font-size: 12px;
+        font-weight: 680;
+        text-decoration: none;
+        box-shadow: 0 3px 10px rgba(23, 110, 209, 0.17);
+      }
+      main {
+        width: min(820px, calc(100% - 36px));
+        margin: 0 auto;
+        padding: 72px 0 88px;
+      }
+      .eyebrow {
+        margin: 0 0 10px;
+        color: #58708f;
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 720px;
+        margin: 0;
+        color: #182235;
+        font-size: clamp(34px, 6vw, 56px);
+        font-weight: 750;
+        line-height: 1.13;
+        letter-spacing: -.045em;
+      }
+      .lead {
+        max-width: 690px;
+        margin: 22px 0 0;
+        color: #536175;
+        font-size: 16px;
+        line-height: 1.9;
+      }
+      .privacy {
+        margin-top: 28px;
+        padding: 15px 17px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        color: #285740;
+        background: rgba(239, 247, 242, 0.9);
+        border: 1px solid rgba(76, 139, 106, 0.16);
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      .privacy span { color: #238653; font-weight: 800; }
+      section { margin-top: 72px; }
+      h2 {
+        margin: 0 0 14px;
+        color: #222d3e;
+        font-size: 24px;
+        letter-spacing: -.025em;
+      }
+      section > p {
+        margin: 0;
+        color: #596679;
+        font-size: 14px;
+        line-height: 1.9;
+      }
+      .cards {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .card {
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(82, 100, 126, 0.14);
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(43, 57, 78, 0.045);
+      }
+      .card strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #293548;
+        font-size: 15px;
+      }
+      .card p {
+        margin: 0;
+        color: #657184;
+        font-size: 13px;
+        line-height: 1.75;
+      }
+      .steps {
+        margin: 24px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+        list-style: none;
+        counter-reset: step;
+      }
+      .steps li {
+        position: relative;
+        padding: 17px 18px 17px 58px;
+        color: #566477;
+        background: rgba(255, 255, 255, 0.66);
+        border: 1px solid rgba(82, 100, 126, 0.13);
+        border-radius: 13px;
+        font-size: 13px;
+        line-height: 1.75;
+        counter-increment: step;
+      }
+      .steps li::before {
+        position: absolute;
+        top: 17px;
+        left: 17px;
+        width: 27px;
+        height: 27px;
+        display: grid;
+        place-items: center;
+        color: #1766c2;
+        background: #e5effa;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 760;
+        content: counter(step);
+      }
+      .note {
+        margin-top: 24px;
+        padding: 18px;
+        color: #5b6677;
+        background: rgba(239, 241, 244, 0.92);
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.8;
+      }
+      .note strong { color: #394455; }
+      .cta {
+        padding: 28px;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid rgba(82, 100, 126, 0.14);
+        border-radius: 16px;
+      }
+      .cta h2 { margin-bottom: 9px; }
+      .cta p { margin: 0 0 18px; }
+      .cta a {
+        display: inline-block;
+        padding: 10px 16px;
+        color: #fff;
+        background: #176ed1;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      footer {
+        margin-top: 62px;
+        color: #7b8594;
+        font-size: 11px;
+        text-align: center;
+      }
+      @media (max-width: 640px) {
+        main { padding-top: 52px; }
+        .cards { grid-template-columns: 1fr; }
+        .open-app { font-size: 11px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * { scroll-behavior: auto !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="header-inner">
+        <a class="brand" href="../" aria-label="PDFenderを開く">
+          <img src="../icon-192.png" alt="" />
+          <span>PDFender</span>
+        </a>
+        <a class="open-app" href="../">PDFを検査する</a>
+      </div>
+    </header>
+    <main>
+      <p class="eyebrow">Detection guide</p>
+      <h1>PDFに隠された文字を、描画情報から見つける</h1>
+      <p class="lead">
+        PDFには、人間が通常の画面では気づきにくい一方、テキスト抽出では取得できる文字を埋め込めます。PDFenderは、講義資料などに仕込まれた生成AI向けの隠し指示、いわゆる間接プロンプトインジェクションを確認するための静的解析ツールです。
+      </p>
+      <div class="privacy">
+        <span aria-hidden="true">✓</span>
+        <strong>PDFの読み込み、描画、文字情報の解析、検出結果の生成はブラウザ内で完結し、PDF本文や抽出文字が端末の外へ送信されることはありません。</strong>
+      </div>
+
+      <section>
+        <h2>検出する隠し方</h2>
+        <p>文字列の内容だけで決めつけず、PDF上での見え方に異常があるかを中心に調べます。</p>
+        <div class="cards">
+          <article class="card">
+            <strong>背景とほぼ同色の文字</strong>
+            <p>宣言された文字色と、実際に描画された文字周辺の背景色を比較します。白背景の白文字や、装飾色に紛れた文字が対象です。</p>
+          </article>
+          <article class="card">
+            <strong>極小・圧縮された文字</strong>
+            <p>ページ内の標準的な文字サイズや文字の変換行列と比較し、人間には読みづらい大きさや横幅に縮められた文字を探します。</p>
+          </article>
+          <article class="card">
+            <strong>描画されない文字</strong>
+            <p>非表示の文字描画モード、空のクリッピング領域、初期状態で非表示のレイヤーなど、抽出はできても画面には現れない文字を確認します。</p>
+          </article>
+          <article class="card">
+            <strong>後から覆われた文字</strong>
+            <p>文字より後に描画された図形や画像との重なりを調べ、必要に応じて遮蔽物を除いて再描画した場合の画素差も確認します。</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>判定の流れ</h2>
+        <ol class="steps">
+          <li>PDF.jsでページを描画しながら、文字・図形・画像の描画命令と描画順序を取得します。</li>
+          <li>文字の色、透明度、サイズ、変形、位置、クリッピング、レイヤー状態、後続オブジェクトとの重なりを検査します。</li>
+          <li>見え方の異常を根拠として確信度を計算します。AIへの指示に似た表現は、視認性の異常がある場合に限って確信度を補強します。</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>検出結果の考え方</h2>
+        <p>
+          検出結果は、確認すべき箇所を絞り込むための機械的な手掛かりです。隠し文字が必ずプロンプトインジェクションであるとは限らず、検出がなかったPDFの安全性を保証するものでもありません。
+        </p>
+        <div class="note">
+          <strong>対象範囲について：</strong>
+          PDFenderは、通常のPDFテキスト抽出では取得できる一方、人間には認識しにくい文字を主な検査対象にしています。画像化された文字やアウトライン化された文字は通常のテキスト抽出に含まれないため、原則として対象外です。OCRは行いません。
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2>ブラウザ内でPDFを検査</h2>
+        <p>インストールやPDFのアップロードは必要ありません。</p>
+        <a href="../">PDFenderを開く</a>
+      </section>
+
+      <footer>
+        <p>PDFender — PDF hidden-instruction detector</p>
+      </footer>
+    </main>
+  </body>
+</html>
