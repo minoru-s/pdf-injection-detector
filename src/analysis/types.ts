@@ -76,4 +76,5 @@ export interface TextCandidate {
   laterOcclusionRatio: number;
   occlusionChangeRatio: number;
   laterOccluderIndices: number[];
+  hasNearbyReplacementText: boolean;
 }

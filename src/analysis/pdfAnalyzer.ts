@@ -524,6 +524,7 @@ function parseOperations(
       | "laterOcclusionRatio"
       | "occlusionChangeRatio"
       | "laterOccluderIndices"
+      | "hasNearbyReplacementText"
     >
   > = [];
   const paints: PaintOperation[] = [];
@@ -748,8 +749,48 @@ function parseOperations(
       laterOcclusionRatio: overlap.ratio,
       occlusionChangeRatio: 0,
       laterOccluderIndices: overlap.operationIndices,
+      hasNearbyReplacementText: false,
     };
   });
+}
+
+function markNearbyReplacementText(candidates: TextCandidate[]) {
+  for (const candidate of candidates) {
+    if (
+      candidate.laterOcclusionRatio < 0.98 ||
+      candidate.laterOccluderIndices.length === 0 ||
+      candidate.box.height <= 0
+    ) {
+      continue;
+    }
+    const lastOccluder = Math.max(...candidate.laterOccluderIndices);
+    candidate.hasNearbyReplacementText = candidates.some((other) => {
+      const operationGap = other.operationIndex - lastOccluder;
+      if (operationGap <= 0 || operationGap > 20) return false;
+      if (
+        other.hiddenByClipping ||
+        other.hiddenByOptionalContent ||
+        other.renderingMode === 3 ||
+        other.fillAlpha <= 0.5 ||
+        other.laterOcclusionRatio >= 0.5
+      ) {
+        return false;
+      }
+      const largerFontSize = Math.max(candidate.fontSize, other.fontSize);
+      const smallerFontSize = Math.min(candidate.fontSize, other.fontSize);
+      if (largerFontSize <= 0 || smallerFontSize / largerFontSize < 0.85) {
+        return false;
+      }
+      const leftAligned =
+        Math.abs(candidate.box.x - other.box.x) <=
+        Math.max(12, candidate.box.height * 0.75);
+      const verticalGap = other.box.y - (candidate.box.y + candidate.box.height);
+      const followsSameLineArea =
+        verticalGap >= -candidate.box.height * 0.25 &&
+        verticalGap <= candidate.box.height * 1.5;
+      return leftAligned && followsSameLineArea;
+    });
+  }
 }
 
 function median(values: number[]): number {
@@ -797,6 +838,7 @@ async function analyzePage(
     pageNumber,
     optionalContentConfig,
   );
+  markNearbyReplacementText(candidates);
   const occlusionGroups = new Map<string, TextCandidate[]>();
   for (const candidate of candidates) {
     if (

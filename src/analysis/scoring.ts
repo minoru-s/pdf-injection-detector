@@ -19,6 +19,14 @@ const INSTRUCTION_PATTERNS = [
   /(?:含め|記載|挿入|追加|使用|用い|論じ|示し).{0,12}(?:ること|てください|なさい|せよ|必須)/u,
 ];
 
+const STRONG_INSTRUCTION_PATTERNS = [
+  /(?:ignore|disregard|forget).{0,50}(?:instruction|prompt|direction|rubric)/iu,
+  /(?:do not|never).{0,30}(?:mention|reveal|disclose).{0,30}(?:instruction|prompt|note|message|text)/iu,
+  /(?:chatgpt|llm|language model|generative ai|生成ai|言語モデル)/iu,
+  /(?:以前|これまで|上記).{0,20}(?:指示|命令).{0,20}(?:無視|忘れ)/u,
+  /(?:この|本).{0,15}(?:指示|命令).{0,20}(?:秘密|言及しない|開示しない)/u,
+];
+
 const VISIBILITY_SIGNAL_KINDS = new Set([
   "low-contrast",
   "tiny-text",
@@ -32,7 +40,9 @@ const VISIBILITY_SIGNAL_KINDS = new Set([
 
 // Relative size alone makes readable footers look suspicious on pages dominated
 // by large headings. Require a genuinely small effective size as well.
-const MAX_TINY_TEXT_SIZE = 8;
+const MAX_STANDALONE_TINY_TEXT_SIZE = 3;
+const MAX_DIRECTIVE_TINY_TEXT_SIZE = 8;
+const MAX_TINY_RECORDED_BOX_HEIGHT = 18;
 
 function colorDistance(
   declared: string | null,
@@ -53,6 +63,19 @@ export function severityForScore(score: number): Severity {
 
 export function hasInstructionLanguage(text: string): boolean {
   return INSTRUCTION_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+export function hasStrongInstructionLanguage(text: string): boolean {
+  return STRONG_INSTRUCTION_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function looksLikeCompactIdentifier(text: string): boolean {
+  const digits = [...text].filter((character) => /\d/u.test(character)).length;
+  if (digits < 4) return false;
+  return (
+    /(?:reference|ref\.?|invoice|id|no\.?|number|番号|コード)/iu.test(text) ||
+    /[A-Z0-9][A-Z0-9._/-]{7,}/u.test(text)
+  );
 }
 
 function belongsToSameTextRun(left: TextCandidate, right: TextCandidate): boolean {
@@ -97,9 +120,13 @@ export function scoreCandidate(
   const { box } = candidate;
   const textLength = [...candidate.text.trim()].length;
   const instructionLanguage = hasInstructionLanguage(instructionContext);
+  const strongInstructionLanguage =
+    hasStrongInstructionLanguage(instructionContext);
   const allowUnreliableGeometryEvidence =
     instructionLanguage ||
     (candidate.fontSize <= 3 && candidate.hasRecordedBox);
+  const shortNumericLayoutLabel =
+    !candidate.geometryReliable && /^\d{1,4}$/u.test(candidate.text.trim());
   const declaredVsRendered = colorDistance(
     candidate.fillColor,
     candidate.surroundingColor,
@@ -114,6 +141,7 @@ export function scoreCandidate(
     candidate.declaredInkRatio !== null &&
     candidate.declaredInkRatio > 0.72 &&
     (candidate.geometryReliable || allowUnreliableGeometryEvidence) &&
+    !shortNumericLayoutLabel &&
     !replacedByLaterPaint
   ) {
     signals.push({
@@ -128,7 +156,12 @@ export function scoreCandidate(
     textLength >= 4 &&
     medianFontSize > 0 &&
     candidate.fontSize > 0 &&
-    candidate.fontSize < MAX_TINY_TEXT_SIZE &&
+    candidate.fontSize <
+      (strongInstructionLanguage
+        ? MAX_DIRECTIVE_TINY_TEXT_SIZE
+        : MAX_STANDALONE_TINY_TEXT_SIZE) &&
+    (candidate.geometryReliable ||
+      candidate.box.height <= MAX_TINY_RECORDED_BOX_HEIGHT) &&
     candidate.fontSize < medianFontSize * 0.35
   ) {
     signals.push({
@@ -148,7 +181,15 @@ export function scoreCandidate(
     candidate.transformScaleRatio,
     geometryCompressionRatio,
   );
-  if (textLength >= 2 && compressionRatio < 0.35) {
+  const suppressCompactIdentifier =
+    compressionRatio >= 0.18 &&
+    looksLikeCompactIdentifier(candidate.text) &&
+    !strongInstructionLanguage;
+  if (
+    textLength >= 2 &&
+    compressionRatio < 0.35 &&
+    !suppressCompactIdentifier
+  ) {
     signals.push({
       kind: "compressed-text",
       score: 25,
@@ -231,7 +272,13 @@ export function scoreCandidate(
     candidate.laterOcclusionRatio >= 0.9 &&
     candidate.occlusionChangeRatio >= 0.2 &&
     instructionLanguage;
-  if (extremeVisualOcclusion || directiveOcclusion) {
+  const likelyDocumentRevision =
+    candidate.hasNearbyReplacementText &&
+    candidate.laterOcclusionRatio >= 0.98 &&
+    candidate.occlusionChangeRatio < 0.5 &&
+    candidate.fontSize >= 6 &&
+    !strongInstructionLanguage;
+  if (!likelyDocumentRevision && (extremeVisualOcclusion || directiveOcclusion)) {
     signals.push({
       kind: "occluded-text",
       score: candidate.laterOcclusionRatio >= 0.9 ? 40 : 30,
