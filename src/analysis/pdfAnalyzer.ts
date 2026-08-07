@@ -9,6 +9,7 @@ import {
   boxesHaveReliableAgreement,
 } from "./geometry";
 import { instructionContextForCandidate, scoreCandidate } from "./scoring";
+import { readTextContent } from "./textContent";
 import type {
   BoundingBox,
   DocumentAnalysis,
@@ -67,6 +68,16 @@ interface TextContentItemLike {
   str: string;
   transform: number[];
   width: number;
+}
+
+function isTextContentItemLike(item: unknown): item is TextContentItemLike {
+  if (!item || typeof item !== "object") return false;
+  const candidate = item as Partial<TextContentItemLike>;
+  return (
+    typeof candidate.str === "string" &&
+    Array.isArray(candidate.transform) &&
+    typeof candidate.width === "number"
+  );
 }
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
@@ -939,7 +950,7 @@ async function analyzePage(
   if (!context) throw new Error("Canvasを初期化できませんでした。");
 
   const operatorListPromise = page.getOperatorList();
-  const textContentPromise = page.getTextContent();
+  const textContentPromise = readTextContent(page);
   await page.render({
     canvas,
     canvasContext: context,
@@ -962,7 +973,7 @@ async function analyzePage(
   markExactVisibleTextMatches(
     candidates,
     textContent.items
-      .filter((item) => "str" in item)
+      .filter(isTextContentItemLike)
       .map((item) => ({
         str: item.str,
         transform: [...item.transform],
