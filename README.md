@@ -22,7 +22,9 @@ PDFenderは、PDFの描画情報を解析し、見えにくく配置された文
 - AIへの指示に似た表現を、視認性異常がある場合の確信度補強として利用
 - 検出ページ間の巡回、疑義箇所への自動スクロール、判定根拠とスコアの表示
 
-通常のページ本文では、AI向け表現だけで単独判定は行いません。Unicode Tagsの連続や異常なゼロ幅文字列は、それ自体が人間には見えない文字データであるため、内容に依存せず確認候補になります。metadata内の指示表現は、AIサービスが読み込む保証がないため低確信度の文書情報として分離します。OCRは現在の検出対象に含まれていません。
+通常のページ本文では、AI向け表現だけで単独判定は行いません。Unicode Tagsの連続や異常なゼロ幅文字列は、それ自体が人間には見えない文字データであるため、内容に依存せず確認候補になります。metadata内の指示表現は、AIサービスが読み込む保証がないため低確信度の文書情報として分離します。
+
+PDFenderが主に検査するのは、PDF内部にテキストデータとして存在し、一般的なPDFのテキスト抽出ではAIの入力に含まれ得る一方、描画上は人間に見えにくく配置された文字です。この「抽出される内容と人間の見え方の差」をPDFの文字情報・描画命令・描画順序から直接調べるため、画像から文字を推定するOCRは採用していません。画像化された文字やアウトライン化された文字、画像を直接読むマルチモーダルAIに固有のリスクは現在の検査対象外です。
 
 ### プライバシー
 
@@ -84,7 +86,9 @@ PDFender is a local-first static web application that inspects PDF drawing opera
 - Uses AI/prompt-like language only as a confidence booster when a visibility anomaly is present
 - Provides detection-page navigation, automatic scrolling to findings, and signal-by-signal scores
 
-Prompt-like wording in ordinary page text never produces a finding by itself. Unicode Tags runs and abnormal zero-width sequences are findings because the character data itself is invisible. Instruction-like metadata is reported separately at low confidence because an AI service may not ingest it. OCR is not currently included.
+Prompt-like wording in ordinary page text never produces a finding by itself. Unicode Tags runs and abnormal zero-width sequences are findings because the character data itself is invisible. Instruction-like metadata is reported separately at low confidence because an AI service may not ingest it.
+
+PDFender primarily examines text stored as PDF text data that ordinary extraction may pass into an AI context even though the document's drawing operations make it difficult for a person to notice. It directly compares extracted text with PDF text objects, drawing operations, and paint order, so it does not use OCR to infer text from images. Rasterized text, outlined glyphs, and risks specific to multimodal AI systems that directly interpret images are outside the current scope.
 
 ### Privacy
 
