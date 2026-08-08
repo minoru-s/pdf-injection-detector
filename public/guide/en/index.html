@@ -133,7 +133,7 @@
         </div>
         <div class="note">
           <strong>Scope:</strong>
-          PDFender primarily examines text that standard PDF text extraction can retrieve but a person may not notice. An isolated zero-width character and a valid emoji tag sequence are not findings by themselves. Rasterized text and outlined glyphs are generally outside this scope because standard text extraction does not expose them. PDFender does not perform OCR.
+          PDFender primarily examines text that standard PDF text extraction can retrieve but a person may not notice. An isolated zero-width character and a valid emoji tag sequence are not findings by themselves. Rasterized text and outlined glyphs are likely to remain visible to a person, while standard text extraction does not expose them. They are therefore unlikely to function as the kind of hidden prompt injection targeted here and are outside the inspection scope. PDFender does not perform OCR.
         </div>
       </section>
 
@@ -158,7 +158,7 @@
           </article>
           <article class="qa-item">
             <h3>Does PDFender use OCR?</h3>
-            <p>No. PDFender examines text stored inside the PDF but made difficult for a person to notice, using text information and drawing operations. Rasterized text and outlined glyphs are outside the current scope because standard PDF text extraction normally does not expose them.</p>
+            <p>No. PDFender examines text stored inside the PDF but made difficult for a person to notice, using text information and drawing operations. Rasterized text and outlined glyphs are likely to remain visible to a person and are not exposed by standard text extraction, so they are unlikely to function as the kind of hidden prompt injection targeted here and are outside the inspection scope.</p>
           </article>
           <article class="qa-item">
             <h3>Does “no findings” mean that a PDF is safe?</h3>

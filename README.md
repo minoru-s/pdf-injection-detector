@@ -24,7 +24,7 @@ PDFenderは、PDFの描画情報を解析し、見えにくく配置された文
 
 通常のページ本文では、AI向け表現だけで単独判定は行いません。Unicode Tagsの連続や異常なゼロ幅文字列は、それ自体が人間には見えない文字データであるため、内容に依存せず確認候補になります。metadata内の指示表現は、AIサービスが読み込む保証がないため低確信度の文書情報として分離します。
 
-PDFenderが主に検査するのは、PDF内部にテキストデータとして存在し、一般的なPDFのテキスト抽出ではAIの入力に含まれ得る一方、描画上は人間に見えにくく配置された文字です。この「抽出される内容と人間の見え方の差」をPDFの文字情報・描画命令・描画順序から直接調べるため、画像から文字を推定するOCRは採用していません。画像化された文字やアウトライン化された文字、画像を直接読むマルチモーダルAIに固有のリスクは現在の検査対象外です。
+PDFenderが主に検査するのは、PDF内部にテキストデータとして存在し、一般的なPDFのテキスト抽出ではAIの入力に含まれ得る一方、描画上は人間に見えにくく配置された文字です。この「抽出される内容と人間の見え方の差」をPDFの文字情報・描画命令・描画順序から直接調べるため、画像から文字を推定するOCRは採用していません。画像化された文字やアウトライン化された文字は、通常の表示では人間にも見える可能性が高いうえ、一般的なPDFテキスト抽出には含まれません。そのため、PDFenderが対象とする「人間には見えにくいのに、テキスト抽出を通じてAIには渡り得る」隠しプロンプトインジェクションとしては機能しにくく、検査対象外としています。
 
 ### プライバシー
 
@@ -88,7 +88,7 @@ PDFender is a local-first static web application that inspects PDF drawing opera
 
 Prompt-like wording in ordinary page text never produces a finding by itself. Unicode Tags runs and abnormal zero-width sequences are findings because the character data itself is invisible. Instruction-like metadata is reported separately at low confidence because an AI service may not ingest it.
 
-PDFender primarily examines text stored as PDF text data that ordinary extraction may pass into an AI context even though the document's drawing operations make it difficult for a person to notice. It directly compares extracted text with PDF text objects, drawing operations, and paint order, so it does not use OCR to infer text from images. Rasterized text, outlined glyphs, and risks specific to multimodal AI systems that directly interpret images are outside the current scope.
+PDFender primarily examines text stored as PDF text data that ordinary extraction may pass into an AI context even though the document's drawing operations make it difficult for a person to notice. It directly compares extracted text with PDF text objects, drawing operations, and paint order, so it does not use OCR to infer text from images. Rasterized text and outlined glyphs are likely to remain visible to a person in a normal view, while ordinary PDF text extraction does not expose them. They are therefore unlikely to function as the kind of hidden prompt injection PDFender targets—content that a person may miss but text extraction may pass to an AI—and are outside the inspection scope.
 
 ### Privacy
 
