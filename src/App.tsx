@@ -468,6 +468,26 @@ export default function App() {
               <p className="results-note">
                 検出は機械的な手掛かりです。内容を確認して判断してください。
               </p>
+              {totalDetections > 0 && (
+                <section className="raster-followup" aria-label="検出後の対応">
+                  <div>
+                    <span>次の対応</span>
+                    <strong>非表示文字を除去したい場合</strong>
+                    <p>全ページを画像化し、文字レイヤーを持たないPDFとして再構成できます。</p>
+                  </div>
+                  <a
+                    href="https://minoru-s.github.io/pdf-raster-exporter/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    画像PDFに変換
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M5 11 11 5M6 5h5v5" />
+                    </svg>
+                  </a>
+                  <small>新しいタブで開きます。PDFはもう一度選択してください。</small>
+                </section>
+              )}
             </aside>
           </section>
         </>

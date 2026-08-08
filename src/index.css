@@ -963,6 +963,83 @@ button.secondary {
   line-height: 1.55;
 }
 
+.raster-followup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0 12px 16px;
+  padding: 13px 14px;
+  background: rgba(239, 243, 248, 0.7);
+  border: 1px solid rgba(89, 108, 137, 0.13);
+  border-radius: 12px;
+}
+
+.raster-followup > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.raster-followup > div > span {
+  color: #78869a;
+  font-size: 8px;
+  font-weight: 680;
+  letter-spacing: 0.06em;
+}
+
+.raster-followup strong {
+  color: #34445a;
+  font-size: 11px;
+}
+
+.raster-followup p {
+  margin: 0;
+  color: #748195;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.raster-followup > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 31px;
+  padding: 0 10px;
+  color: #37536f;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(79, 103, 132, 0.2);
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.raster-followup > a:hover {
+  background: #fff;
+  border-color: rgba(55, 83, 111, 0.32);
+}
+
+.raster-followup > a svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.raster-followup > small {
+  grid-column: 1 / -1;
+  color: #8a94a2;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1267,6 +1344,14 @@ button.secondary {
 
   .summary-actions button {
     flex: 1 1 auto;
+  }
+
+  .raster-followup {
+    grid-template-columns: 1fr;
+  }
+
+  .raster-followup > a {
+    justify-self: start;
   }
 
   .workspace {
