@@ -8,15 +8,26 @@ import {
   boxExtentAlongDirection,
   boxesHaveReliableAgreement,
 } from "./geometry";
-import { instructionContextForCandidate, scoreCandidate } from "./scoring";
+import { analyzeDocumentMetadata } from "./metadata";
+import {
+  hasInstructionLanguage,
+  instructionContextForCandidate,
+  scoreCandidate,
+  severityForScore,
+} from "./scoring";
 import { readTextContent } from "./textContent";
 import type {
   BoundingBox,
+  Detection,
   DocumentAnalysis,
   PageAnalysis,
   Severity,
   TextCandidate,
 } from "./types";
+import {
+  containsInvisibleUnicode,
+  inspectInvisibleUnicode,
+} from "./unicode";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -922,6 +933,96 @@ function markExactVisibleTextMatches(
   }
 }
 
+function unionBoxes(boxes: BoundingBox[]): BoundingBox | null {
+  if (boxes.length === 0) return null;
+  const minX = Math.min(...boxes.map((box) => box.x));
+  const minY = Math.min(...boxes.map((box) => box.y));
+  const maxX = Math.max(...boxes.map((box) => box.x + box.width));
+  const maxY = Math.max(...boxes.map((box) => box.y + box.height));
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function comparableUnicodeText(value: string): string {
+  return inspectInvisibleUnicode(value).semanticText
+    .normalize("NFKC")
+    .replace(/\s+/gu, "")
+    .toLowerCase();
+}
+
+function extractedUnicodeDetections(
+  pageNumber: number,
+  items: TextContentItemLike[],
+  existingDetections: Detection[],
+  viewportTransform: Matrix,
+): Detection[] {
+  const suspiciousIndexes = items
+    .map((item, index) => containsInvisibleUnicode(item.str) ? index : -1)
+    .filter((index) => index >= 0);
+  if (suspiciousIndexes.length === 0) return [];
+
+  const groups: Array<{ first: number; last: number }> = [];
+  for (const index of suspiciousIndexes) {
+    const previous = groups.at(-1);
+    if (previous && index - previous.last <= 3) previous.last = index;
+    else groups.push({ first: index, last: index });
+  }
+
+  const detectedTexts = existingDetections
+    .map((detection) => comparableUnicodeText(detection.text))
+    .filter((text) => text.length >= 2);
+  const detections: Detection[] = [];
+
+  for (const [groupIndex, group] of groups.entries()) {
+    const contextStart = Math.max(0, group.first - 1);
+    const contextEnd = Math.min(items.length - 1, group.last + 1);
+    const rawText = items
+      .slice(contextStart, contextEnd + 1)
+      .map((item) => item.str)
+      .join("");
+    const inspection = inspectInvisibleUnicode(rawText);
+    if (inspection.signals.length === 0) continue;
+
+    const comparable = comparableUnicodeText(inspection.semanticText);
+    if (
+      comparable.length >= 2 &&
+      detectedTexts.some((detectedText) => detectedText === comparable)
+    ) {
+      continue;
+    }
+
+    const signals = [...inspection.signals];
+    if (hasInstructionLanguage(inspection.semanticText)) {
+      signals.push({
+        kind: "instruction-language",
+        score: 20,
+        label: "AIへの指示に似た表現",
+        detail:
+          "不可視Unicodeを除去または復号した文字列に指示表現があり、確信度を補強しました。",
+      });
+    }
+    const score = Math.min(
+      100,
+      signals.reduce((sum, signal) => sum + signal.score, 0),
+    );
+    const boxes = items
+      .slice(group.first, group.last + 1)
+      .map((item) => textContentBox(item, viewportTransform))
+      .filter((box) => box !== null);
+    detections.push({
+      id: `p${pageNumber}-unicode-${groupIndex}`,
+      pageNumber,
+      operationIndex: 1_000_000 + groupIndex,
+      text: inspection.displayText.slice(0, 800),
+      box: unionBoxes(boxes) ?? { x: 0, y: 0, width: 1, height: 1 },
+      score,
+      severity: severityForScore(score),
+      signals,
+    });
+  }
+
+  return detections;
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
@@ -970,15 +1071,16 @@ async function analyzePage(
     optionalContentConfig,
   );
   markNearbyReplacementText(candidates);
+  const textItems = textContent.items
+    .filter(isTextContentItemLike)
+    .map((item) => ({
+      str: item.str,
+      transform: [...item.transform],
+      width: item.width,
+    }));
   markExactVisibleTextMatches(
     candidates,
-    textContent.items
-      .filter(isTextContentItemLike)
-      .map((item) => ({
-        str: item.str,
-        transform: [...item.transform],
-        width: item.width,
-      })),
+    textItems,
     context,
     viewport.transform as Matrix,
   );
@@ -1039,7 +1141,7 @@ async function analyzePage(
       .map((candidate) => candidate.fontSize)
       .filter((fontSize) => fontSize > 0),
   );
-  const detections = candidates
+  const candidateDetections = candidates
     .map((candidate, index) =>
       scoreCandidate(
         candidate,
@@ -1049,8 +1151,16 @@ async function analyzePage(
         instructionContextForCandidate(candidates, index),
       ),
     )
-    .filter((detection) => detection !== null)
-    .sort((left, right) => right.score - left.score);
+    .filter((detection) => detection !== null);
+  const detections = [
+    ...candidateDetections,
+    ...extractedUnicodeDetections(
+      pageNumber,
+      textItems,
+      candidateDetections,
+      viewport.transform as Matrix,
+    ),
+  ].sort((left, right) => right.score - left.score);
 
   const previewUrl = canvas.toDataURL("image/jpeg", 0.82);
   page.cleanup();
@@ -1085,8 +1195,17 @@ export async function analyzePdf(
     useSystemFonts: true,
   });
   const pdf = await loadingTask.promise;
-  const optionalContentConfig = await pdf.getOptionalContentConfig({
-    intent: "display",
+  const metadataPromise = pdf.getMetadata().catch(() => ({
+    info: {} as Record<string, unknown>,
+    metadata: null,
+  }));
+  const [optionalContentConfig, rawMetadata] = await Promise.all([
+    pdf.getOptionalContentConfig({ intent: "display" }),
+    metadataPromise,
+  ]);
+  const documentDetections = analyzeDocumentMetadata({
+    info: rawMetadata.info as Record<string, unknown>,
+    metadata: rawMetadata.metadata,
   });
   const pages: PageAnalysis[] = [];
   try {
@@ -1099,6 +1218,7 @@ export async function analyzePdf(
   }
 
   const summary: Record<Severity, number> = { info: 0, caution: 0, high: 0 };
+  for (const detection of documentDetections) summary[detection.severity] += 1;
   for (const page of pages) {
     for (const detection of page.detections) summary[detection.severity] += 1;
   }
@@ -1123,6 +1243,7 @@ export async function analyzePdf(
     pageCount: pages.length,
     analyzedAt: new Date().toISOString(),
     pages,
+    documentDetections,
     summary,
   };
 }

@@ -25,14 +25,18 @@ describe("readTextContent", () => {
         controller.close();
       },
     });
+    const streamTextContent = vi.fn().mockReturnValue(stream);
 
     const result = await readTextContent({
       isPureXfa: false,
       getTextContent,
-      streamTextContent: () => stream,
+      streamTextContent,
     });
 
     expect(getTextContent).not.toHaveBeenCalled();
+    expect(streamTextContent).toHaveBeenCalledWith({
+      disableNormalization: true,
+    });
     expect(result).toEqual({
       items: [{ str: "first" }, { str: "second" }],
       styles: {
@@ -58,6 +62,6 @@ describe("readTextContent", () => {
     });
 
     expect(result).toBe(expected);
-    expect(getTextContent).toHaveBeenCalledOnce();
+    expect(getTextContent).toHaveBeenCalledWith({ disableNormalization: true });
   });
 });

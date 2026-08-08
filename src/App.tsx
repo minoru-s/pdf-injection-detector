@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { analyzePdf } from "./analysis/pdfAnalyzer";
-import type { Detection, DocumentAnalysis, Severity } from "./analysis/types";
+import type {
+  Detection,
+  DocumentAnalysis,
+  DocumentDetection,
+  Severity,
+} from "./analysis/types";
 
 const severityLabels: Record<Severity, string> = {
   info: "情報",
@@ -53,6 +58,29 @@ function DetectionCard({
         ))}
       </span>
     </button>
+  );
+}
+
+function DocumentDetectionCard({
+  detection,
+}: {
+  detection: DocumentDetection;
+}) {
+  return (
+    <article className="document-detection-card" data-severity={detection.severity}>
+      <span className="detection-heading">
+        <span className="severity-badge">{severityLabels[detection.severity]}</span>
+        <strong>確信度 {detection.score}</strong>
+      </span>
+      <span className="document-detection-source">{detection.source}</span>
+      <span className="detected-text">{detection.text}</span>
+      <span className="signal-list">
+        {detection.signals.map((signal) => (
+          <span key={signal.kind}>{signal.label}</span>
+        ))}
+      </span>
+      <small>{detection.signals[0]?.detail}</small>
+    </article>
   );
 }
 
@@ -311,7 +339,7 @@ export default function App() {
                 <span>
                   {totalDetections === 0
                     ? "機械的な異常は見つかりませんでした"
-                    : "ページ内の強調枠を確認してください"}
+                    : "右側の検出内容を確認してください"}
                 </span>
               </div>
             </div>
@@ -436,6 +464,23 @@ export default function App() {
                 </div>
                 <span>{page.detections.length}件</span>
               </div>
+              {analysis.documentDetections.length > 0 && (
+                <section className="document-detections" aria-label="文書情報の検出">
+                  <div className="document-detections-heading">
+                    <div>
+                      <strong>文書情報</strong>
+                      <span>ページに表示されないPDFプロパティ</span>
+                    </div>
+                    <b>{analysis.documentDetections.length}件</b>
+                  </div>
+                  {analysis.documentDetections.map((detection) => (
+                    <DocumentDetectionCard
+                      key={detection.id}
+                      detection={detection}
+                    />
+                  ))}
+                </section>
+              )}
               {page.detections.length === 0 ? (
                 <div className="empty-result">
                   <span className="empty-icon" aria-hidden="true">✓</span>
@@ -528,7 +573,7 @@ export default function App() {
               </p>
               <a
                 className="learn-more-link"
-                href={`${import.meta.env.BASE_URL}guide/`}
+                href={`${import.meta.env.BASE_URL}guide/index.html`}
                 target="_blank"
                 rel="noopener noreferrer"
               >

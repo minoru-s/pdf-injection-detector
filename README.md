@@ -16,10 +16,13 @@ PDFenderは、PDFの描画情報を解析し、見えにくく配置された文
 - ページ外や端に不自然に配置された文字を検出
 - 透明または非表示の描画モードで配置された文字を検出
 - 後から描画された図形・画像に覆われた文字を検出
+- Unicode Tagsの連続、異常に高密度なゼロ幅文字列、不自然なBidi制御を検出
+- Unicode Tagsと一般的なゼロ幅ビット列を復号し、難読化解除後の指示表現で確信度を補強
+- PDFのDocumentInfo・XMPにある不可視Unicodeや指示表現を、ページ上の検出とは分けて表示
 - AIへの指示に似た表現を、視認性異常がある場合の確信度補強として利用
 - 検出ページ間の巡回、疑義箇所への自動スクロール、判定根拠とスコアの表示
 
-AI向け表現だけで単独判定は行いません。OCRは現在の検出対象に含まれていません。
+通常のページ本文では、AI向け表現だけで単独判定は行いません。Unicode Tagsの連続や異常なゼロ幅文字列は、それ自体が人間には見えない文字データであるため、内容に依存せず確認候補になります。metadata内の指示表現は、AIサービスが読み込む保証がないため低確信度の文書情報として分離します。OCRは現在の検出対象に含まれていません。
 
 ### プライバシー
 
@@ -43,7 +46,7 @@ npm run build
 npm run preview
 ```
 
-`fixtures/visibility-cases.pdf`は、正常例と、白文字、微小文字、圧縮文字、ページ端、被覆、低透明度の検出例を含む生成テストPDFです。
+`fixtures/visibility-cases.pdf`は、正常例と、白文字、微小文字、圧縮文字、ページ端、被覆、低透明度の検出例を含む生成テストPDFです。`fixtures/unicode-cases.pdf`は、Unicode Tags、文字間ゼロ幅、ゼロ幅ビット列、Bidi override、metadataの検出例と、孤立したゼロ幅スペース・正規の絵文字タグ列の非検出対照を含みます。
 
 `fixtures/real/`には、任意のローカル回帰テスト用PDFを配置できます。ユーザー提供のPDF本体はGitの追跡対象外です。現在使用している6件の回帰サンプルについては、正解ラベルのみをJSONで管理しています。
 
@@ -75,10 +78,13 @@ PDFender is a local-first static web application that inspects PDF drawing opera
 - Detects text placed outside or unusually close to a page edge
 - Detects transparent text and invisible text-rendering modes
 - Detects text covered by later-drawn paths or images
+- Detects Unicode Tags runs, abnormally dense zero-width sequences, and suspicious bidirectional controls
+- Decodes Unicode Tags and common zero-width binary encodings, then uses deobfuscated instruction language as supporting evidence
+- Reports invisible Unicode and instruction-like text in DocumentInfo or XMP separately from page findings
 - Uses AI/prompt-like language only as a confidence booster when a visibility anomaly is present
 - Provides detection-page navigation, automatic scrolling to findings, and signal-by-signal scores
 
-Prompt-like wording never produces a finding by itself. OCR is not currently included.
+Prompt-like wording in ordinary page text never produces a finding by itself. Unicode Tags runs and abnormal zero-width sequences are findings because the character data itself is invisible. Instruction-like metadata is reported separately at low confidence because an AI service may not ingest it. OCR is not currently included.
 
 ### Privacy
 
@@ -102,7 +108,7 @@ npm run build
 npm run preview
 ```
 
-`fixtures/visibility-cases.pdf` is a generated test PDF containing a control case and examples of white-on-white, tiny, compressed, edge-positioned, covered, and low-opacity text.
+`fixtures/visibility-cases.pdf` is a generated test PDF containing a control case and examples of white-on-white, tiny, compressed, edge-positioned, covered, and low-opacity text. `fixtures/unicode-cases.pdf` covers Unicode Tags, interspersed zero-width characters, zero-width binary encoding, a bidi override, metadata, and negative controls for an isolated zero-width space and a valid emoji tag sequence.
 
 Optional local regression PDFs can be placed in `fixtures/real/`. User-provided PDFs are ignored by Git. Only ground-truth JSON labels for the six current regression samples are tracked.
 

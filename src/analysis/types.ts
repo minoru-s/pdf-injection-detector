@@ -9,6 +9,10 @@ export type SignalKind =
   | "clipped-text"
   | "hidden-layer"
   | "occluded-text"
+  | "unicode-tags"
+  | "zero-width-encoding"
+  | "bidi-control"
+  | "metadata-instruction"
   | "instruction-language";
 
 export interface BoundingBox {
@@ -44,11 +48,21 @@ export interface PageAnalysis {
   detections: Detection[];
 }
 
+export interface DocumentDetection {
+  id: string;
+  source: string;
+  text: string;
+  score: number;
+  severity: Severity;
+  signals: DetectionSignal[];
+}
+
 export interface DocumentAnalysis {
   fileName: string;
   pageCount: number;
   analyzedAt: string;
   pages: PageAnalysis[];
+  documentDetections: DocumentDetection[];
   summary: Record<Severity, number>;
 }
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Learn how PDFender detects hidden prompt injections in PDF files, including white text, invisible rendering modes, clipping, hidden layers, compressed text, and object occlusion." />
+    <meta name="description" content="Learn how PDFender detects hidden prompt injections in PDF files, including white text, hidden layers, occlusion, Unicode Tags, zero-width encoding, bidi controls, and metadata." />
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#eef1f5" />
     <link rel="icon" href="../../favicon-64.png" type="image/png" sizes="64x64" />
@@ -18,7 +18,7 @@
     <meta property="og:locale:alternate" content="ja_JP" />
     <meta property="og:site_name" content="PDFender" />
     <meta property="og:title" content="How PDFender detects hidden text in PDF files" />
-    <meta property="og:description" content="A technical guide to detecting PDF text hidden with color, clipping, optional layers, invisible rendering modes, compression, and later-drawn objects." />
+    <meta property="og:description" content="A technical guide to detecting PDF text hidden with drawing properties, Unicode Tags, zero-width encoding, bidi controls, and document metadata." />
     <meta property="og:url" content="https://minoru-s.github.io/pdf-injection-detector/guide/en/" />
     <meta property="og:image" content="https://minoru-s.github.io/pdf-injection-detector/app-icon-1024.png" />
     <meta property="og:image:alt" content="PDFender app icon" />
@@ -72,6 +72,14 @@
             <strong>Text covered by later objects</strong>
             <p>It analyzes drawing order and overlap with later paths or images, and can compare pixels after re-rendering without suspected covering objects.</p>
           </article>
+          <article class="card">
+            <strong>Invisible Unicode</strong>
+            <p>It checks runs of Unicode Tags, dense zero-width sequences, and suspicious bidirectional controls. Tags and common zero-width binary encodings are decoded for review.</p>
+          </article>
+          <article class="card">
+            <strong>PDF document properties</strong>
+            <p>It checks DocumentInfo and XMP metadata for invisible Unicode and instruction-like text, reporting these separately because AI ingestion is service-dependent.</p>
+          </article>
         </div>
       </section>
 
@@ -79,8 +87,8 @@
         <h2>How the analysis works</h2>
         <ol class="steps">
           <li>PDF.js renders each page while PDFender records text, path, and image drawing operations together with their order.</li>
-          <li>It evaluates color, opacity, size, transforms, position, clipping, optional-content visibility, and overlap with later objects.</li>
-          <li>It calculates a confidence score from visibility anomalies. Prompt-like language can raise confidence only when a visibility anomaly already exists.</li>
+          <li>It evaluates color, opacity, size, transforms, position, clipping, optional-content visibility, overlap with later objects, and invisible Unicode in raw extracted text.</li>
+          <li>It calculates confidence from visual or character-code anomalies. Prompt-like language in deobfuscated text can raise confidence only when an anomaly already exists.</li>
         </ol>
       </section>
 
@@ -106,6 +114,9 @@
               <tr><td>Solid-white tiling pattern</td><td>Unreadable on white</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
               <tr><td>Text matching a pale decorative stripe</td><td>Camouflaged in decoration</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
               <tr><td>Occlusion by a later-drawn object</td><td>Covered and unreadable</td><td>Text is extracted</td><td class="detected">Detected</td></tr>
+              <tr><td>Unicode Tags payload</td><td>The instruction is not shown</td><td>Special code points are extracted</td><td class="detected">Decoded and detected</td></tr>
+              <tr><td>Interspersed or binary zero-width encoding</td><td>Normal text or empty space</td><td>Contains zero-width characters</td><td class="detected">Removed or decoded and detected</td></tr>
+              <tr><td>Suspicious bidi override</td><td>Display order changes</td><td>Logical order contains controls</td><td class="detected">Detected</td></tr>
             </tbody>
           </table>
         </div>
@@ -114,11 +125,15 @@
       <section>
         <h2>How to interpret findings</h2>
         <p>
-          A finding is a mechanical clue that helps a reviewer focus on suspicious areas. Hidden text is not necessarily a prompt injection, and a clean result does not guarantee that a PDF is safe.
+          A finding is a mechanical clue that helps a reviewer focus on suspicious areas. Hidden text is not necessarily a prompt injection.
         </p>
+        <div class="safety-warning">
+          <strong>A clean result does not guarantee that a PDF is safe.</strong>
+          <span>Do not rely on the result alone. Always review the original PDF and any unusual areas yourself.</span>
+        </div>
         <div class="note">
           <strong>Scope:</strong>
-          PDFender primarily examines text that standard PDF text extraction can retrieve but a person may not notice. Rasterized text and outlined glyphs are generally outside this scope because standard text extraction does not expose them. PDFender does not perform OCR.
+          PDFender primarily examines text that standard PDF text extraction can retrieve but a person may not notice. An isolated zero-width character and a valid emoji tag sequence are not findings by themselves. Rasterized text and outlined glyphs are generally outside this scope because standard text extraction does not expose them. PDFender does not perform OCR.
         </div>
       </section>
 
@@ -135,11 +150,15 @@
           </article>
           <article class="qa-item">
             <h3>Does prompt-like wording trigger a finding by itself?</h3>
-            <p>No. PDFender uses prompt-like language only to strengthen confidence when the same text also has a visibility anomaly such as non-rendering, low contrast, compression, or occlusion.</p>
+            <p>Not in ordinary page text. PDFender uses prompt-like language only to strengthen confidence when the same text also has a visual or character-code anomaly. Instruction-like metadata is separated as a low-confidence document-property finding.</p>
+          </article>
+          <article class="qa-item">
+            <h3>What are Unicode Tags and zero-width characters?</h3>
+            <p>They are special Unicode characters that are not displayed or have no visible width. PDFender looks for abnormal runs or density and decodes known encodings when possible. A single character is not enough because these characters also have legitimate uses.</p>
           </article>
           <article class="qa-item">
             <h3>Does PDFender use OCR?</h3>
-            <p>No. It analyzes text and drawing operations stored inside the PDF. Rasterized text and outlined glyphs are normally outside its scope because standard PDF text extraction does not expose them.</p>
+            <p>No. PDFender examines text stored inside the PDF but made difficult for a person to notice, using text information and drawing operations. Rasterized text and outlined glyphs are outside the current scope because standard PDF text extraction normally does not expose them.</p>
           </article>
           <article class="qa-item">
             <h3>Does “no findings” mean that a PDF is safe?</h3>

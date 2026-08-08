@@ -4,6 +4,7 @@ import type {
   Severity,
   TextCandidate,
 } from "./types";
+import { inspectInvisibleUnicode } from "./unicode";
 
 const INSTRUCTION_PATTERNS = [
   /(?:ignore|disregard|forget).{0,40}(?:instruction|prompt|direction)/iu,
@@ -36,6 +37,9 @@ const VISIBILITY_SIGNAL_KINDS = new Set([
   "clipped-text",
   "hidden-layer",
   "occluded-text",
+  "unicode-tags",
+  "zero-width-encoding",
+  "bidi-control",
 ]);
 
 // Relative size alone makes readable footers look suspicious on pages dominated
@@ -116,12 +120,16 @@ export function scoreCandidate(
   pageHeight: number,
   instructionContext = candidate.text,
 ): Detection | null {
-  const signals: DetectionSignal[] = [];
+  const unicodeInspection = inspectInvisibleUnicode(candidate.text);
+  const contextInspection = inspectInvisibleUnicode(instructionContext);
+  const signals: DetectionSignal[] = [...unicodeInspection.signals];
   const { box } = candidate;
   const textLength = [...candidate.text.trim()].length;
-  const instructionLanguage = hasInstructionLanguage(instructionContext);
+  const instructionLanguage = hasInstructionLanguage(
+    contextInspection.semanticText,
+  );
   const strongInstructionLanguage =
-    hasStrongInstructionLanguage(instructionContext);
+    hasStrongInstructionLanguage(contextInspection.semanticText);
   const allowUnreliableGeometryEvidence =
     instructionLanguage ||
     (candidate.fontSize <= 3 && candidate.hasRecordedBox);
@@ -317,7 +325,9 @@ export function scoreCandidate(
     id: `p${candidate.pageNumber}-op${candidate.operationIndex}`,
     pageNumber: candidate.pageNumber,
     operationIndex: candidate.operationIndex,
-    text: candidate.text.trim(),
+    text: unicodeInspection.signals.length > 0
+      ? unicodeInspection.displayText.slice(0, 800)
+      : candidate.text.trim(),
     box,
     score,
     severity: severityForScore(score),

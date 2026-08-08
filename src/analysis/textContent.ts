@@ -6,8 +6,10 @@ export interface TextContentChunk {
 
 interface TextContentPage {
   isPureXfa: boolean;
-  getTextContent(): Promise<TextContentChunk>;
-  streamTextContent(): ReadableStream<TextContentChunk>;
+  getTextContent(params?: { disableNormalization?: boolean }): Promise<TextContentChunk>;
+  streamTextContent(params?: {
+    disableNormalization?: boolean;
+  }): ReadableStream<TextContentChunk>;
 }
 
 /**
@@ -20,9 +22,9 @@ export async function readTextContent(
 ): Promise<TextContentChunk> {
   // PDF.js uses a separate XFA-to-text conversion that does not iterate a
   // ReadableStream, so preserve that path for pure XFA documents.
-  if (page.isPureXfa) return page.getTextContent();
+  if (page.isPureXfa) return page.getTextContent({ disableNormalization: true });
 
-  const reader = page.streamTextContent().getReader();
+  const reader = page.streamTextContent({ disableNormalization: true }).getReader();
   const textContent: TextContentChunk = {
     items: [],
     styles: Object.create(null) as Record<string, unknown>,
