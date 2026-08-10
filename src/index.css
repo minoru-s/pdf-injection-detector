@@ -1429,6 +1429,12 @@ button.secondary {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .results-panel {
+    max-height: none;
+    overflow-y: visible;
+    overscroll-behavior: auto;
+  }
+
   .preview-stage {
     padding: 14px 12px 22px;
   }
