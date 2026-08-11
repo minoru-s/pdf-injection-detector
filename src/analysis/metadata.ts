@@ -13,6 +13,31 @@ interface PdfMetadataResult {
   metadata?: Iterable<[string, unknown]> | null;
 }
 
+const POWERPOINT_SIGNATURE = /(?:microsoft.{0,12}powerpoint|powerpoint.{0,12}microsoft)/iu;
+
+export function metadataIdentifiesMicrosoftPowerPoint(
+  metadata: PdfMetadataResult,
+): boolean {
+  for (const [source, value] of Object.entries(metadata.info ?? {})) {
+    if (!/(?:creator|producer)/iu.test(source) || typeof value !== "string") {
+      continue;
+    }
+    if (POWERPOINT_SIGNATURE.test(value)) return true;
+  }
+  if (metadata.metadata) {
+    for (const [source, value] of metadata.metadata) {
+      if (
+        !/(?:creator.?tool|producer)/iu.test(source) ||
+        typeof value !== "string"
+      ) {
+        continue;
+      }
+      if (POWERPOINT_SIGNATURE.test(value)) return true;
+    }
+  }
+  return false;
+}
+
 function readableSource(source: string): string {
   const names: Record<string, string> = {
     Title: "タイトル",
@@ -85,4 +110,3 @@ export function analyzeDocumentMetadata(
 
   return detections;
 }
-

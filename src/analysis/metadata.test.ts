@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { analyzeDocumentMetadata } from "./metadata";
+import {
+  analyzeDocumentMetadata,
+  metadataIdentifiesMicrosoftPowerPoint,
+} from "./metadata";
 
 function encodeTags(value: string): string {
   return [...value]
@@ -42,5 +45,38 @@ describe("analyzeDocumentMetadata", () => {
       "unicode-tags",
     );
     expect(detections[0].text).toContain("ignore prior instructions");
+  });
+});
+
+describe("metadataIdentifiesMicrosoftPowerPoint", () => {
+  it("accepts an explicit PowerPoint Creator or Producer signature", () => {
+    expect(
+      metadataIdentifiesMicrosoftPowerPoint({
+        info: { Producer: "Microsoft® PowerPoint® for Microsoft 365" },
+      }),
+    ).toBe(true);
+    expect(
+      metadataIdentifiesMicrosoftPowerPoint({
+        metadata: new Map([
+          ["xmp:CreatorTool", "Microsoft PowerPoint for Mac"],
+        ]),
+      }),
+    ).toBe(true);
+  });
+
+  it("does not infer PowerPoint from a generic exporter or title", () => {
+    expect(
+      metadataIdentifiesMicrosoftPowerPoint({
+        info: { Title: "Presentation", Author: "Walnut Exporter" },
+      }),
+    ).toBe(false);
+  });
+
+  it("does not accept PowerPoint text in unrelated metadata fields", () => {
+    expect(
+      metadataIdentifiesMicrosoftPowerPoint({
+        info: { Subject: "Created from a PowerPoint handout" },
+      }),
+    ).toBe(false);
   });
 });

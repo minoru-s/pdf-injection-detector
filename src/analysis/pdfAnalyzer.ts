@@ -8,7 +8,17 @@ import {
   boxExtentAlongDirection,
   boxesHaveReliableAgreement,
 } from "./geometry";
-import { analyzeDocumentMetadata } from "./metadata";
+import {
+  analyzeDocumentMetadata,
+  metadataIdentifiesMicrosoftPowerPoint,
+} from "./metadata";
+import {
+  destinationRequiresPreviewFallback,
+  powerPointPreviewDuplicateGroups,
+  powerPointPreviewDuplicateOperations,
+  type InternalPreviewLink,
+  type PreviewImage,
+} from "./powerPointPreview";
 import {
   hasInstructionLanguage,
   instructionContextForCandidate,
@@ -73,6 +83,7 @@ interface PaintOperation {
   operationIndex: number;
   box: BoundingBox;
   alpha: number;
+  kind: "image" | "path";
 }
 
 interface TextContentItemLike {
@@ -520,7 +531,7 @@ function parseOperations(
   viewportTransform: Matrix,
   pageNumber: number,
   optionalContentConfig: OptionalContentVisibility | null,
-): TextCandidate[] {
+): { candidates: TextCandidate[]; images: PreviewImage[] } {
   const width = context.canvas.width;
   const height = context.canvas.height;
   let state: GraphicsState = {
@@ -758,11 +769,12 @@ function parseOperations(
         operationIndex: index,
         box: paintBox,
         alpha: state.fillAlpha,
+        kind: isImagePaintOperation(operator) ? "image" : "path",
       });
     }
   }
 
-  return textDrafts.map((draft) => {
+  const candidates = textDrafts.map((draft) => {
     const laterPaints = paints.filter(
       (paint) => paint.operationIndex > draft.operationIndex,
     );
@@ -782,6 +794,12 @@ function parseOperations(
       hasNearbyReplacementText: false,
     };
   });
+  return {
+    candidates,
+    images: paints
+      .filter((paint) => paint.kind === "image")
+      .map((paint) => ({ box: paint.box })),
+  };
 }
 
 function markNearbyReplacementText(candidates: TextCandidate[]) {
@@ -1037,10 +1055,125 @@ function pdfAssetUrl(path: string): string {
   return new URL(`pdfjs/${path}/`, appBaseUrl).href;
 }
 
+interface LinkAnnotationLike {
+  subtype?: string;
+  rect?: number[];
+  dest?: unknown;
+  url?: string;
+  unsafeUrl?: string;
+}
+
+interface PageScoringContext {
+  candidates: TextCandidate[];
+  medianFontSize: number;
+  width: number;
+  height: number;
+}
+
+interface PreviewSuppressionAudit {
+  sourcePageNumber: number;
+  destinationPageNumber: number;
+  operationIndexes: number[];
+}
+
+async function resolveDestinationPageNumber(
+  pdf: Awaited<ReturnType<typeof getDocument>["promise"]>,
+  destination: unknown,
+): Promise<number | null> {
+  let explicitDestination: unknown = destination;
+  if (typeof destination === "string") {
+    explicitDestination = await pdf.getDestination(destination);
+  }
+  if (!Array.isArray(explicitDestination) || explicitDestination.length === 0) {
+    return null;
+  }
+
+  const target = explicitDestination[0];
+  if (Number.isInteger(target)) {
+    const pageNumber = Number(target) + 1;
+    return pageNumber >= 1 && pageNumber <= pdf.numPages ? pageNumber : null;
+  }
+  if (
+    target &&
+    typeof target === "object" &&
+    Number.isInteger((target as { num?: unknown }).num) &&
+    Number.isInteger((target as { gen?: unknown }).gen)
+  ) {
+    try {
+      return (await pdf.getPageIndex(target as { num: number; gen: number })) + 1;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function destinationPageText(
+  pdf: Awaited<ReturnType<typeof getDocument>["promise"]>,
+  pageNumber: number,
+  cache: Map<number, Promise<string>>,
+): Promise<string> {
+  const cached = cache.get(pageNumber);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const page = await pdf.getPage(pageNumber);
+    const content = await readTextContent(page);
+    return content.items
+      .filter(isTextContentItemLike)
+      .map((item) => item.str)
+      .join(" ");
+  })();
+  cache.set(pageNumber, pending);
+  return pending;
+}
+
+async function internalPreviewLinks(
+  pdf: Awaited<ReturnType<typeof getDocument>["promise"]>,
+  annotations: unknown[],
+  viewportTransform: Matrix,
+  destinationTextCache: Map<number, Promise<string>>,
+): Promise<InternalPreviewLink[]> {
+  const links: InternalPreviewLink[] = [];
+  for (const rawAnnotation of annotations) {
+    const annotation = rawAnnotation as LinkAnnotationLike;
+    if (
+      annotation.subtype !== "Link" ||
+      annotation.url ||
+      annotation.unsafeUrl ||
+      !Array.isArray(annotation.rect) ||
+      annotation.rect.length < 4
+    ) {
+      continue;
+    }
+    const [x1, y1, x2, y2] = annotation.rect;
+    if (![x1, y1, x2, y2].every(Number.isFinite)) continue;
+    const destinationPageNumber = await resolveDestinationPageNumber(
+      pdf,
+      annotation.dest,
+    );
+    if (destinationPageNumber === null) continue;
+    links.push({
+      box: transformBox(viewportTransform, x1, y1, x2 - x1, y2 - y1),
+      destinationPageNumber,
+      destinationText: await destinationPageText(
+        pdf,
+        destinationPageNumber,
+        destinationTextCache,
+      ),
+    });
+  }
+  return links;
+}
+
 async function analyzePage(
   pdf: Awaited<ReturnType<typeof getDocument>["promise"]>,
   pageNumber: number,
   optionalContentConfig: OptionalContentVisibility | null,
+  destinationTextCache: Map<number, Promise<string>>,
+  pageScoringCache: Map<number, PageScoringContext>,
+  previewSuppressionAudit: PreviewSuppressionAudit[],
+  allowPowerPointPreviewSuppression: boolean,
 ): Promise<PageAnalysis> {
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale: 1.5 });
@@ -1052,6 +1185,7 @@ async function analyzePage(
 
   const operatorListPromise = page.getOperatorList();
   const textContentPromise = readTextContent(page);
+  const annotationsPromise = page.getAnnotations({ intent: "display" });
   await page.render({
     canvas,
     canvasContext: context,
@@ -1061,8 +1195,9 @@ async function analyzePage(
   }).promise;
   const operatorList = await operatorListPromise;
   const textContent = await textContentPromise;
+  const annotations = await annotationsPromise;
   const bboxes = page.recordedBBoxes as BBoxReader | null;
-  const candidates = parseOperations(
+  const parsedOperations = parseOperations(
     operatorList,
     bboxes,
     context,
@@ -1070,6 +1205,7 @@ async function analyzePage(
     pageNumber,
     optionalContentConfig,
   );
+  const { candidates } = parsedOperations;
   markNearbyReplacementText(candidates);
   const textItems = textContent.items
     .filter(isTextContentItemLike)
@@ -1084,6 +1220,33 @@ async function analyzePage(
     context,
     viewport.transform as Matrix,
   );
+  const previewLinks = await internalPreviewLinks(
+    pdf,
+    annotations,
+    viewport.transform as Matrix,
+    destinationTextCache,
+  );
+  const previewDuplicateOperations = allowPowerPointPreviewSuppression
+    ? powerPointPreviewDuplicateOperations(
+        candidates,
+        parsedOperations.images,
+        previewLinks,
+      )
+    : new Set<number>();
+  const previewDuplicateGroups = allowPowerPointPreviewSuppression
+    ? powerPointPreviewDuplicateGroups(
+        candidates,
+        parsedOperations.images,
+        previewLinks,
+      )
+    : [];
+  for (const group of previewDuplicateGroups) {
+    previewSuppressionAudit.push({
+      sourcePageNumber: pageNumber,
+      destinationPageNumber: group.destinationPageNumber,
+      operationIndexes: group.operationIndexes,
+    });
+  }
   const occlusionGroups = new Map<string, TextCandidate[]>();
   for (const candidate of candidates) {
     if (
@@ -1130,10 +1293,19 @@ async function analyzePage(
       __PDFENDER_BENCHMARK__?: Array<{
         pageNumber: number;
         candidates: TextCandidate[];
+        previewLinks: InternalPreviewLink[];
+        previewImages: PreviewImage[];
+        previewDuplicateOperations: number[];
       }>;
     };
     benchmarkGlobal.__PDFENDER_BENCHMARK__ ??= [];
-    benchmarkGlobal.__PDFENDER_BENCHMARK__.push({ pageNumber, candidates });
+    benchmarkGlobal.__PDFENDER_BENCHMARK__.push({
+      pageNumber,
+      candidates,
+      previewLinks,
+      previewImages: parsedOperations.images,
+      previewDuplicateOperations: [...previewDuplicateOperations],
+    });
   }
   const medianFontSize = median(
     candidates
@@ -1141,15 +1313,23 @@ async function analyzePage(
       .map((candidate) => candidate.fontSize)
       .filter((fontSize) => fontSize > 0),
   );
+  pageScoringCache.set(pageNumber, {
+    candidates,
+    medianFontSize,
+    width: canvas.width,
+    height: canvas.height,
+  });
   const candidateDetections = candidates
     .map((candidate, index) =>
-      scoreCandidate(
-        candidate,
-        medianFontSize,
-        canvas.width,
-        canvas.height,
-        instructionContextForCandidate(candidates, index),
-      ),
+      previewDuplicateOperations.has(candidate.operationIndex)
+        ? null
+        : scoreCandidate(
+            candidate,
+            medianFontSize,
+            canvas.width,
+            canvas.height,
+            instructionContextForCandidate(candidates, index),
+          ),
     )
     .filter((detection) => detection !== null);
   const detections = [
@@ -1207,14 +1387,64 @@ export async function analyzePdf(
     info: rawMetadata.info as Record<string, unknown>,
     metadata: rawMetadata.metadata,
   });
+  const allowPowerPointPreviewSuppression =
+    metadataIdentifiesMicrosoftPowerPoint({
+      info: rawMetadata.info as Record<string, unknown>,
+      metadata: rawMetadata.metadata,
+    });
   const pages: PageAnalysis[] = [];
+  const destinationTextCache = new Map<number, Promise<string>>();
+  const pageScoringCache = new Map<number, PageScoringContext>();
+  const previewSuppressionAudit: PreviewSuppressionAudit[] = [];
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      pages.push(await analyzePage(pdf, pageNumber, optionalContentConfig));
+      pages.push(
+        await analyzePage(
+          pdf,
+          pageNumber,
+          optionalContentConfig,
+          destinationTextCache,
+          pageScoringCache,
+          previewSuppressionAudit,
+          allowPowerPointPreviewSuppression,
+        ),
+      );
       onProgress?.(pageNumber, pdf.numPages);
     }
   } finally {
     await loadingTask.destroy();
+  }
+
+  for (const audit of previewSuppressionAudit) {
+    const destinationPage = pages[audit.destinationPageNumber - 1];
+    const destinationContext = pageScoringCache.get(audit.destinationPageNumber);
+    const destinationHasIndependentAnomaly = destinationRequiresPreviewFallback(
+      destinationContext?.candidates ?? [],
+      (destinationPage?.detections.length ?? 0) > 0,
+    );
+    if (!destinationHasIndependentAnomaly) continue;
+
+    const sourcePage = pages[audit.sourcePageNumber - 1];
+    const sourceContext = pageScoringCache.get(audit.sourcePageNumber);
+    if (!sourcePage || !sourceContext) continue;
+    const operationIndexes = new Set(audit.operationIndexes);
+    for (const [candidateIndex, candidate] of sourceContext.candidates.entries()) {
+      if (!operationIndexes.has(candidate.operationIndex)) continue;
+      const detection = scoreCandidate(
+        candidate,
+        sourceContext.medianFontSize,
+        sourceContext.width,
+        sourceContext.height,
+        instructionContextForCandidate(sourceContext.candidates, candidateIndex),
+      );
+      if (
+        detection &&
+        !sourcePage.detections.some((existing) => existing.id === detection.id)
+      ) {
+        sourcePage.detections.push(detection);
+      }
+    }
+    sourcePage.detections.sort((left, right) => right.score - left.score);
   }
 
   const summary: Record<Severity, number> = { info: 0, caution: 0, high: 0 };
