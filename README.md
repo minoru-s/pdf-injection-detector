@@ -58,6 +58,10 @@ npm run preview
 
 Web App Manifest、各種アイコン、Service Workerを備えており、PWAとしてインストールできます。Service Workerは本番ビルドでのみ登録され、同一オリジンのアプリ資産をキャッシュします。
 
+### ライセンス
+
+PDFender独自のソースコードは[MIT License](LICENSE)で公開しています。PDF.js、React、同梱フォント、CMap、WASMなどの第三者ソフトウェアおよびアセットには、それぞれのライセンスが適用されます。詳細は[第三者ライセンス一覧](THIRD_PARTY_NOTICES.md)を参照してください。
+
 ### 制約と免責
 
 検出結果は機械的な手掛かりであり、PDFの安全性やプロンプトインジェクションの有無を保証するものではありません。誤検知や見逃しが発生する可能性があります。
@@ -121,6 +125,10 @@ Optional local regression PDFs can be placed in `fixtures/real/`. User-provided 
 Pushes to `main` run the tests and production build through GitHub Actions before deploying to GitHub Pages. The production build includes the PDF.js CMaps, standard fonts, WASM, and ICC assets required for Japanese CID-font rendering.
 
 The app includes a Web App Manifest, install icons, and a Service Worker, so it can be installed as a PWA. The Service Worker is registered only in production and caches same-origin application assets.
+
+### License
+
+PDFender's original source code is released under the [MIT License](LICENSE). Third-party software and assets—including PDF.js, React, bundled fonts, CMaps, and WebAssembly components—remain subject to their respective licenses. See [Third-party licenses](THIRD_PARTY_NOTICES.md) for details.
 
 ### Limitations and disclaimer
 

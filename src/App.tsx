@@ -623,6 +623,26 @@ export default function App() {
                     </dd>
                   </div>
                   <div><dt>バージョン</dt><dd>0.1.0</dd></div>
+                  <div><dt>著作権</dt><dd>© 2026 西藤 実</dd></div>
+                  <div>
+                    <dt>ライセンス</dt>
+                    <dd className="license-links">
+                      <a
+                        href={`${import.meta.env.BASE_URL}pdfjs/licenses/PDFender-MIT.txt`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        MIT License
+                      </a>
+                      <a
+                        href={`${import.meta.env.BASE_URL}pdfjs/licenses/THIRD_PARTY_NOTICES.txt`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        第三者ライセンス
+                      </a>
+                    </dd>
+                  </div>
                 </dl>
               </section>
             </div>
